@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Confidentist Brand Palette */
+  --color-brand-900: #0B1D3A;
+  --color-brand-800: #132448;
+  --color-brand-700: #1B2E5E;
+  --color-brand-600: #243A7A;
+  --color-brand-500: #2E4A97;
+  --color-brand-400: #4C6EC4;
+  --color-brand-300: #7A96D8;
+  --color-brand-200: #B3C4EC;
+  --color-brand-100: #E8EDF8;
+  --color-brand-50:  #F4F6FC;
+
+  --color-teal-600: #0D9488;
+  --color-teal-500: #14B8A6;
+  --color-teal-100: #CCFBF1;
+
+  --color-gold-500: #F59E0B;
+  --color-gold-100: #FEF3C7;
+
+  --color-sidebar: #0F1D3E;
+  --color-sidebar-hover: #1B2E5E;
+  --color-sidebar-text: #94A3B8;
+  --color-sidebar-active: #4C6EC4;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: #F1F5F9;
+  color: #1E293B;
+  font-family: "Inter", system-ui, sans-serif;
+  margin: 0;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #F1F5F9; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
