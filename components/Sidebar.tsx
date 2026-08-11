@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, BookOpen, ShoppingCart,
-  BarChart3, CalendarDays, Settings, GraduationCap, LogOut
+  BarChart3, CalendarDays, Settings, GraduationCap, LogOut, AlertTriangle,
 } from "lucide-react";
+import { orders } from "@/lib/data";
 
 const nav = [
   { label: "Dashboard",   href: "/",             icon: LayoutDashboard },
@@ -14,11 +15,13 @@ const nav = [
   { label: "Orders",      href: "/orders",       icon: ShoppingCart },
   { label: "Analytics",   href: "/analytics",    icon: BarChart3 },
   { label: "Exam Dates",  href: "/exam-dates",   icon: CalendarDays },
+  { label: "Accountant",  href: "/accountant",   icon: AlertTriangle },
   { label: "Settings",    href: "/settings",     icon: Settings },
 ];
 
 export default function Sidebar() {
   const path = usePathname();
+  const overdueCount = orders.filter(o => (o.installmentPlan?.overdueDays ?? 0) > 0).length;
 
   return (
     <aside
@@ -48,6 +51,7 @@ export default function Sidebar() {
         </p>
         {nav.map(({ label, href, icon: Icon }) => {
           const active = href === "/" ? path === "/" : path.startsWith(href);
+          const isAccountant = href === "/accountant";
           return (
             <Link
               key={href}
@@ -55,15 +59,29 @@ export default function Sidebar() {
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
               style={{
                 background:  active ? "#1B2E5E" : "transparent",
-                color:       active ? "#FFFFFF"  : "#94A3B8",
+                color:       active ? "#FFFFFF"  : isAccountant && overdueCount > 0 ? "#FCA5A5" : "#94A3B8",
               }}
             >
               <Icon size={17} />
               {label}
-              {active && (
+              {isAccountant && overdueCount > 0 && !active && (
+                <span
+                  className="ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
+                  style={{ background: "#DC2626", color: "#fff" }}
+                >
+                  {overdueCount}
+                </span>
+              )}
+              {active && !isAccountant && (
                 <span
                   className="ml-auto w-1.5 h-1.5 rounded-full"
                   style={{ background: "#4C9BE8" }}
+                />
+              )}
+              {active && isAccountant && (
+                <span
+                  className="ml-auto w-1.5 h-1.5 rounded-full"
+                  style={{ background: "#FCA5A5" }}
                 />
               )}
             </Link>
