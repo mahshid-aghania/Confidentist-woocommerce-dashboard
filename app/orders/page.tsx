@@ -1,6 +1,3 @@
-"use client";
-
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { orders } from "@/lib/data";
 import { ShoppingCart, DollarSign, RefreshCw, Clock, AlertTriangle, CreditCard } from "lucide-react";
@@ -12,24 +9,35 @@ const statusStyle: Record<string, { bg: string; color: string; label: string }> 
   pending:    { bg: "#FEF3C7", color: "#B45309", label: "Pending"    },
 };
 
-export default function OrdersPage() {
-  const router = useRouter();
+const PER_PAGE = 50;
+
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const sp   = await searchParams;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10));
+
   const total      = orders.reduce((s, o) => s + (o.status !== "refunded" ? o.amount : 0), 0);
   const completed  = orders.filter(o => o.status === "completed").length;
   const refunded   = orders.filter(o => o.status === "refunded").length;
   const processing = orders.filter(o => o.status === "processing" || o.status === "pending").length;
   const lateCount  = orders.filter(o => (o.installmentPlan?.overdueDays ?? 0) > 0).length;
 
+  const totalPages  = Math.ceil(orders.length / PER_PAGE);
+  const pageOrders  = orders.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
   return (
     <div className="space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: "Total Revenue",    value: `$${total.toLocaleString()}`, icon: DollarSign,    color: "#1B2E5E" },
-          { label: "Completed",        value: completed.toString(),         icon: ShoppingCart,   color: "#0D9488" },
-          { label: "Processing",       value: processing.toString(),        icon: Clock,          color: "#F59E0B" },
-          { label: "Refunded",         value: refunded.toString(),          icon: RefreshCw,      color: "#EF4444" },
-          { label: "Overdue Payments", value: lateCount.toString(),         icon: AlertTriangle,  color: "#DC2626" },
+          { label: "Total Revenue",    value: `$${total.toLocaleString()}`, icon: DollarSign,   color: "#1B2E5E" },
+          { label: "Completed",        value: completed.toLocaleString(),   icon: ShoppingCart,  color: "#0D9488" },
+          { label: "Processing",       value: processing.toLocaleString(),  icon: Clock,         color: "#F59E0B" },
+          { label: "Refunded",         value: refunded.toLocaleString(),    icon: RefreshCw,     color: "#EF4444" },
+          { label: "Overdue Payments", value: lateCount.toLocaleString(),   icon: AlertTriangle, color: "#DC2626" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-xl p-5 shadow-sm border flex items-center gap-4" style={{ borderColor: "#E2E8F0" }}>
             <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}18` }}>
@@ -43,7 +51,7 @@ export default function OrdersPage() {
         ))}
       </div>
 
-      {/* Overdue Warning Banner */}
+      {/* Overdue Warning */}
       {lateCount > 0 && (
         <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl border" style={{ background: "#FEF2F2", borderColor: "#FECACA" }}>
           <AlertTriangle size={16} style={{ color: "#DC2626" }} className="shrink-0" />
@@ -57,8 +65,12 @@ export default function OrdersPage() {
       {/* Orders Table */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden" style={{ borderColor: "#E2E8F0" }}>
         <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: "#F1F5F9" }}>
-          <h3 className="text-sm font-semibold text-slate-700">All Orders</h3>
-          <p className="text-xs text-slate-400">Click any row to view full details</p>
+          <h3 className="text-sm font-semibold text-slate-700">
+            All Orders <span className="font-normal text-slate-400">({orders.length.toLocaleString()} total)</span>
+          </h3>
+          <p className="text-xs text-slate-400">
+            Page {page} of {totalPages} · Click order # to view details
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -72,24 +84,26 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: "#F8FAFC" }}>
-              {orders.map((o) => {
-                const st = statusStyle[o.status];
+              {pageOrders.map((o) => {
+                const st      = statusStyle[o.status];
                 const overdue = o.installmentPlan?.overdueDays ?? 0;
                 const isPartial = o.paymentType === "partial";
                 const methodLabel = isPartial
-                  ? o.installmentPlan?.method === "installment" ? "Installment" : "Deposit"
+                  ? (o.installmentPlan?.method === "installment" ? "Installment" : "Deposit")
                   : "Full";
                 const methodColor = isPartial ? "#9A3412" : "#166534";
                 const methodBg    = isPartial ? "#FFF7ED"  : "#F0FDF4";
 
                 return (
-                  <tr
-                    key={o.id}
-                    className="hover:bg-slate-50 transition-colors cursor-pointer"
-                    onClick={() => router.push(`/orders/${o.id}`)}
-                  >
+                  <tr key={o.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-3.5">
-                      <span className="text-xs font-semibold" style={{ color: "#1B2E5E" }}>{o.orderId}</span>
+                      <Link
+                        href={`/orders/${o.id}`}
+                        className="text-xs font-semibold hover:underline"
+                        style={{ color: "#1B2E5E" }}
+                      >
+                        {o.orderId}
+                      </Link>
                       {overdue > 0 && (
                         <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: "#DC2626" }}>
                           {overdue}d late
@@ -134,6 +148,36 @@ export default function OrdersPage() {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="px-6 py-4 border-t flex items-center justify-between" style={{ borderColor: "#F1F5F9" }}>
+          <p className="text-xs text-slate-400">
+            Showing {((page-1)*PER_PAGE)+1}–{Math.min(page*PER_PAGE, orders.length)} of {orders.length.toLocaleString()} orders
+          </p>
+          <div className="flex items-center gap-2">
+            {page > 1 && (
+              <Link
+                href={`/orders?page=${page - 1}`}
+                className="text-xs px-3 py-1.5 rounded-lg border font-medium hover:bg-slate-50"
+                style={{ borderColor: "#E2E8F0", color: "#1B2E5E" }}
+              >
+                ← Prev
+              </Link>
+            )}
+            <span className="text-xs text-slate-500 px-2">
+              {page} / {totalPages}
+            </span>
+            {page < totalPages && (
+              <Link
+                href={`/orders?page=${page + 1}`}
+                className="text-xs px-3 py-1.5 rounded-lg border font-medium hover:bg-slate-50"
+                style={{ borderColor: "#E2E8F0", color: "#1B2E5E" }}
+              >
+                Next →
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import MetricCard from "@/components/MetricCard";
 import { RevenueAreaChart, EnrollmentsBarChart } from "@/components/RevenueChart";
-import { stats, orders, courses } from "@/lib/data";
+import { stats, orders, courses, recentMonthlyRevenue } from "@/lib/data";
 
 const statusStyles: Record<string, { bg: string; color: string; label: string }> = {
   completed:  { bg: "#DCFCE7", color: "#15803D", label: "Completed"  },
@@ -12,6 +12,11 @@ const statusStyles: Record<string, { bg: string; color: string; label: string }>
   refunded:   { bg: "#FEE2E2", color: "#DC2626", label: "Refunded"   },
   pending:    { bg: "#FEF3C7", color: "#B45309", label: "Pending"    },
 };
+
+function fmtRevenue(n: number) {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  return `$${(n / 1000).toFixed(0)}k`;
+}
 
 export default function DashboardPage() {
   const recentOrders = orders.slice(0, 8);
@@ -49,7 +54,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Total Revenue"
-          value={`$${(stats.totalRevenue / 1000).toFixed(0)}k`}
+          value={fmtRevenue(stats.totalRevenue)}
           sub="CAD — all time"
           icon={DollarSign}
           trend="up"
@@ -57,18 +62,18 @@ export default function DashboardPage() {
           accent="#1B2E5E"
         />
         <MetricCard
-          title="Active Students"
-          value={stats.activeStudents.toString()}
-          sub={`${stats.totalStudents.toLocaleString()} total enrolled`}
+          title="Total Students"
+          value={stats.totalStudents.toLocaleString()}
+          sub={`${stats.activeStudents} active`}
           icon={Users}
           trend="up"
           trendValue="8.1%"
           accent="#2E4A97"
         />
         <MetricCard
-          title="Orders This Month"
-          value="96"
-          sub={`Avg. $${stats.avgOrderValue} per order`}
+          title="Total Orders"
+          value={stats.totalOrders.toLocaleString()}
+          sub={`Avg. $${stats.avgOrderValue.toLocaleString()} per order`}
           icon={ShoppingCart}
           trend="up"
           trendValue="5.3%"
@@ -91,26 +96,26 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-semibold text-slate-700">Monthly Revenue</h3>
-              <p className="text-xs text-slate-400">Jan – Aug 2026</p>
+              <p className="text-xs text-slate-400">Last 24 months</p>
             </div>
             <span
               className="text-xs font-semibold px-2.5 py-1 rounded-full"
               style={{ background: "#E8EDF8", color: "#1B2E5E" }}
             >
-              +12.4% YoY
+              All time
             </span>
           </div>
-          <RevenueAreaChart />
+          <RevenueAreaChart data={recentMonthlyRevenue} />
         </div>
 
         <div className="bg-white rounded-xl p-5 shadow-sm border" style={{ borderColor: "#E2E8F0" }}>
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-semibold text-slate-700">Students & Orders</h3>
-              <p className="text-xs text-slate-400">Monthly breakdown</p>
+              <p className="text-xs text-slate-400">Last 24 months</p>
             </div>
           </div>
-          <EnrollmentsBarChart />
+          <EnrollmentsBarChart data={recentMonthlyRevenue} />
         </div>
       </div>
 
@@ -134,9 +139,9 @@ export default function DashboardPage() {
                       <span className="text-xs font-medium text-slate-700">{c.shortName}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-xs text-slate-400">{c.sold} sold</span>
+                      <span className="text-xs text-slate-400">{c.sold.toLocaleString()} sold</span>
                       <span className="text-xs font-semibold text-slate-700">
-                        ${(c.revenue / 1000).toFixed(0)}k
+                        {fmtRevenue(c.revenue)}
                       </span>
                     </div>
                   </div>
@@ -198,10 +203,10 @@ export default function DashboardPage() {
       {/* Quick Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Courses Offered",  value: "6",                     icon: BookOpen,    color: "#2E4A97" },
-          { label: "Avg. Satisfaction",       value: `${stats.satisfactionRate}%`, icon: Star, color: "#F59E0B" },
-          { label: "Course Completion Rate",  value: `${stats.completionRate}%`,  icon: CheckCircle, color: "#0D9488" },
-          { label: "Avg. Order Value",        value: `$${stats.avgOrderValue}`,   icon: Clock,    color: "#6366F1" },
+          { label: "Total Courses Offered",  value: "6",                          icon: BookOpen,    color: "#2E4A97" },
+          { label: "Avg. Satisfaction",       value: `${stats.satisfactionRate}%`, icon: Star,        color: "#F59E0B" },
+          { label: "Order Completion Rate",   value: `${stats.completionRate}%`,   icon: CheckCircle, color: "#0D9488" },
+          { label: "Avg. Order Value",        value: `$${stats.avgOrderValue.toLocaleString()}`, icon: Clock, color: "#6366F1" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-xl p-4 shadow-sm border flex items-center gap-4" style={{ borderColor: "#E2E8F0" }}>
             <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}18` }}>
