@@ -139,7 +139,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             )}
             <div>
               <p className="text-xs text-slate-400 mb-1">Course(s)</p>
-              <p className="text-sm font-semibold text-slate-800">{order.course}</p>
+              <p className="text-sm font-semibold text-slate-800">{order.productName || order.course}</p>
+              {order.variation && order.variation !== "Standard" && (
+                <span className="inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "#E8EDF8", color: "#1B2E5E" }}>
+                  {order.variation}
+                </span>
+              )}
             </div>
           </div>
 

@@ -76,7 +76,7 @@ export default async function OrdersPage({
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "#F8FAFC" }}>
-                {["Order", "Student", "Course", "Payment", "Paid / Total", "Date", "Status"].map(h => (
+                {["Order", "Student", "Date", "Course", "Payment", "Paid / Total", "Status"].map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                     {h}
                   </th>
@@ -114,10 +114,16 @@ export default async function OrdersPage({
                       <p className="text-xs font-medium text-slate-700">{o.student}</p>
                       <p className="text-xs text-slate-400">{o.email}</p>
                     </td>
+                    <td className="px-5 py-3.5 text-xs text-slate-400">{o.date}</td>
                     <td className="px-5 py-3.5">
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#E8EDF8", color: "#1B2E5E" }}>
-                        {o.course}
-                      </span>
+                      <div className="flex flex-col gap-1" title={o.productName || o.course}>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium w-fit" style={{ background: "#E8EDF8", color: "#1B2E5E" }}>
+                          {o.course}
+                        </span>
+                        {o.variation && o.variation !== "Standard" && (
+                          <span className="text-xs font-medium text-slate-500">{o.variation}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
@@ -136,7 +142,6 @@ export default async function OrdersPage({
                       ${o.paidAmount.toLocaleString()}{" "}
                       <span className="font-normal text-slate-400">/ ${o.amount.toLocaleString()}</span>
                     </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-400">{o.date}</td>
                     <td className="px-5 py-3.5">
                       <span className="text-xs px-2.5 py-1 rounded-full font-semibold capitalize"
                         style={{ background: st.bg, color: st.color }}>
