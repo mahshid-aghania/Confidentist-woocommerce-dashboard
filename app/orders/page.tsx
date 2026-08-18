@@ -115,9 +115,14 @@ export default async function OrdersPage({
                       <p className="text-xs text-slate-400">{o.email}</p>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#E8EDF8", color: "#1B2E5E" }}>
-                        {o.course}
-                      </span>
+                      <div className="flex flex-col gap-1" title={o.productName || o.course}>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium w-fit" style={{ background: "#E8EDF8", color: "#1B2E5E" }}>
+                          {o.course}
+                        </span>
+                        {o.variation && o.variation !== "Standard" && (
+                          <span className="text-xs font-medium text-slate-500">{o.variation}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">

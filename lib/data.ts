@@ -64,6 +64,8 @@ export type Order = {
   email: string;
   phone: string;
   course: string;
+  productName?: string;   // full WooCommerce product name (incl. variation), e.g. "AFK Comprehensive - Feb 2027"
+  variation?: string;     // derived tier, e.g. "Comprehensive", "Extended", "Full Package"
   amount: number;
   paidAmount: number;
   paymentType: "full" | "partial";
