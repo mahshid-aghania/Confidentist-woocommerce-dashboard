@@ -31,7 +31,7 @@ function ReportBody() {
     { label: "Total Orders", value: report.totalOrders.toLocaleString(), icon: ShoppingCart, color: "#4C6EC4", sub: report.refundedOrders ? `${report.refundedOrders} refunded (excluded)` : "all paid orders" },
     { label: "Revenue Incl. Tax", value: `$${cad(report.grossIncl)}`, icon: DollarSign, color: "#1B2E5E", sub: "gross collected" },
     { label: "Revenue Excl. Tax", value: `$${cad(report.netExcl)}`, icon: Receipt, color: "#0D9488", sub: "net of HST" },
-    { label: "Tax Collected", value: `$${cad(report.tax)}`, icon: Landmark, color: "#F59E0B", sub: "HST 13%" },
+    { label: "Tax Collected", value: `$${cad(report.tax)}`, icon: Landmark, color: "#F59E0B", sub: "GST/HST/PST" },
   ];
 
   return (
@@ -87,7 +87,7 @@ function ReportBody() {
           </div>
           <div className="mt-5 flex items-center gap-2 text-xs" style={{ color: "#B3C4EC" }}>
             <FileText size={13} />
-            <span>Generated on {generatedOn} · Currency: CAD · Amounts include 13% HST unless noted</span>
+            <span>Generated on {generatedOn} · Currency: CAD · Sales tax computed per billing province</span>
           </div>
         </div>
 
@@ -167,10 +167,57 @@ function ReportBody() {
             </table>
           </div>
 
+          {/* Tax by province */}
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: "#EDF1F7" }}>
+            <div className="px-5 py-3 border-b" style={{ borderColor: "#EDF1F7", background: "#F8FAFC" }}>
+              <h2 className="text-sm font-semibold text-slate-700">Tax by Province / Region</h2>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-400" style={{ background: "#FCFDFE" }}>
+                  <th className="px-5 py-2.5 font-medium">Jurisdiction</th>
+                  <th className="px-5 py-2.5 font-medium text-right">Rate</th>
+                  <th className="px-5 py-2.5 font-medium text-right">Orders</th>
+                  <th className="px-5 py-2.5 font-medium text-right">Excl. Tax</th>
+                  <th className="px-5 py-2.5 font-medium text-right">Tax</th>
+                  <th className="px-5 py-2.5 font-medium text-right">Incl. Tax</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.provinces.map((p) => (
+                  <tr key={p.code} className="border-t" style={{ borderColor: "#F1F5F9" }}>
+                    <td className="px-5 py-2.5 font-medium text-slate-700">
+                      {p.name} <span className="text-slate-400 font-normal">({p.code})</span>
+                    </td>
+                    <td className="px-5 py-2.5 text-right text-slate-600">{(p.rate * 100).toFixed(p.rate === 0.14975 ? 3 : 0)}%</td>
+                    <td className="px-5 py-2.5 text-right text-slate-600">{p.orders}</td>
+                    <td className="px-5 py-2.5 text-right text-slate-600">${cad(p.net)}</td>
+                    <td className="px-5 py-2.5 text-right text-slate-600">${cad(p.tax)}</td>
+                    <td className="px-5 py-2.5 text-right font-semibold text-slate-800">${cad(p.gross)}</td>
+                  </tr>
+                ))}
+                {report.provinces.length === 0 && (
+                  <tr><td colSpan={6} className="px-5 py-6 text-center text-slate-400 text-sm">No orders in this month.</td></tr>
+                )}
+              </tbody>
+              {report.provinces.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2" style={{ borderColor: "#E2E8F0", background: "#F8FAFC" }}>
+                    <td className="px-5 py-3 font-bold text-slate-800" colSpan={2}>Total</td>
+                    <td className="px-5 py-3 text-right font-bold text-slate-800">{report.totalOrders}</td>
+                    <td className="px-5 py-3 text-right font-bold text-slate-800">${cad(report.netExcl)}</td>
+                    <td className="px-5 py-3 text-right font-bold text-slate-800">${cad(report.tax)}</td>
+                    <td className="px-5 py-3 text-right font-bold" style={{ color: "#1B2E5E" }}>${cad(report.grossIncl)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+
           {/* Footer note */}
           <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
             <span>ConfiDentist · Confidential financial statement</span>
-            <span>Tax basis: HST 13% (Ontario), amounts are tax-inclusive</span>
+            <span>Tax computed per billing province (GST/HST/PST); exports zero-rated · amounts tax-inclusive</span>
           </div>
         </div>
       </div>
