@@ -4,6 +4,7 @@ import {
   CheckCircle2, Clock, TrendingDown, DollarSign,
 } from "lucide-react";
 import { orders } from "@/lib/data";
+import MonthlyReportButton from "@/components/MonthlyReportButton";
 
 function urgencyLevel(days: number): "critical" | "high" | "medium" {
   if (days >= 10) return "critical";
@@ -46,16 +47,19 @@ export default function AccountantPage() {
               Review overdue installments and contact students. Call before escalating.
             </p>
           </div>
-          <div className="hidden md:flex items-center gap-6 text-center">
-            <div>
-              <p className="text-white text-2xl font-bold">{overdueOrders.length}</p>
-              <p className="text-red-300 text-xs">Overdue Orders</p>
+          <div className="flex items-center gap-6">
+            <div className="hidden md:flex items-center gap-6 text-center">
+              <div>
+                <p className="text-white text-2xl font-bold">{overdueOrders.length}</p>
+                <p className="text-red-300 text-xs">Overdue Orders</p>
+              </div>
+              <div className="w-px h-10" style={{ background: "rgba(255,255,255,0.15)" }} />
+              <div>
+                <p className="text-white text-2xl font-bold">${totalOverdue.toLocaleString()}</p>
+                <p className="text-red-300 text-xs">Total Outstanding</p>
+              </div>
             </div>
-            <div className="w-px h-10" style={{ background: "rgba(255,255,255,0.15)" }} />
-            <div>
-              <p className="text-white text-2xl font-bold">${totalOverdue.toLocaleString()}</p>
-              <p className="text-red-300 text-xs">Total Outstanding</p>
-            </div>
+            <MonthlyReportButton />
           </div>
         </div>
       </div>

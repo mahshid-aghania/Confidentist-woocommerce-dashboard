@@ -10,6 +10,8 @@ const titles: Record<string, string> = {
   "/orders":     "Orders",
   "/analytics":  "Analytics",
   "/exam-dates": "Exam Dates",
+  "/accountant": "Accountant",
+  "/accountant/report": "Monthly Report",
   "/settings":   "Settings",
 };
 
@@ -22,7 +24,7 @@ export default function Header() {
 
   return (
     <header
-      className="flex items-center justify-between px-6 py-3.5 border-b shrink-0 bg-white"
+      className="print-hide flex items-center justify-between px-6 py-3.5 border-b shrink-0 bg-white"
       style={{ borderColor: "#E2E8F0" }}
     >
       <div>

@@ -43,3 +43,34 @@ body {
 ::-webkit-scrollbar-track { background: #F1F5F9; }
 ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* ── Print / Save-as-PDF: show only the report sheet ─────────────── */
+@media print {
+  @page { size: A4; margin: 12mm; }
+
+  html, body {
+    background: #fff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Print colours/gradients faithfully */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide app chrome and any element opted out of print */
+  .print-hide { display: none !important; }
+
+  /* Let the report expand to full width, no clipping */
+  body > div { overflow: visible !important; }
+  main { overflow: visible !important; padding: 0 !important; }
+
+  #report-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+  }
+  #report-sheet, #report-sheet * { break-inside: avoid; }
+}
