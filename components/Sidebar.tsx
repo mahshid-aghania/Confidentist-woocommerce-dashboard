@@ -25,7 +25,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="flex flex-col w-60 shrink-0 h-screen overflow-y-auto"
+      className="print-hide flex flex-col w-60 shrink-0 h-screen overflow-y-auto"
       style={{ background: "#0F1D3E" }}
     >
       {/* Logo */}
