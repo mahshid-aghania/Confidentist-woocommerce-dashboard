@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { orders } from "@/lib/data";
+import { getOrders } from "@/lib/db";
 import { ShoppingCart, DollarSign, RefreshCw, Clock, AlertTriangle, CreditCard } from "lucide-react";
 
 const statusStyle: Record<string, { bg: string; color: string; label: string }> = {
@@ -18,6 +18,7 @@ export default async function OrdersPage({
 }) {
   const sp   = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
+  const orders = await getOrders();
 
   const total      = orders.reduce((s, o) => s + (o.status !== "refunded" ? o.amount : 0), 0);
   const completed  = orders.filter(o => o.status === "completed").length;

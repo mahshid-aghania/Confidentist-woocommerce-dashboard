@@ -1,12 +1,15 @@
 import { RevenueAreaChart, EnrollmentsBarChart } from "@/components/RevenueChart";
-import { courses, monthlyRevenue, recentMonthlyRevenue } from "@/lib/data";
+import { getCourses, getMonthlyRevenue } from "@/lib/db";
 
 function fmtRevenue(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M CAD`;
   return `$${(n / 1000).toFixed(0)}k CAD`;
 }
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+  const courses = await getCourses();
+  const monthlyRevenue = await getMonthlyRevenue();
+  const recentMonthlyRevenue = monthlyRevenue.slice(-24);
   // YTD = 2026 months only
   const ytdMonths   = monthlyRevenue.filter(m => m.month.includes("'26"));
   const totalRevenue = ytdMonths.reduce((s, m) => s + m.revenue, 0);

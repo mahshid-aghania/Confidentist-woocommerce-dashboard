@@ -3,7 +3,7 @@ import {
   AlertTriangle, Phone, Mail, CreditCard,
   CheckCircle2, Clock, TrendingDown, DollarSign,
 } from "lucide-react";
-import { orders } from "@/lib/data";
+import { getOrders } from "@/lib/db";
 
 function urgencyLevel(days: number): "critical" | "high" | "medium" {
   if (days >= 10) return "critical";
@@ -17,7 +17,8 @@ const urgencyStyle = {
   medium:   { bg: "#FFFBEB", border: "#FDE68A", badge: "#FEF3C7", badgeText: "#92400E", dot: "#F59E0B", label: "Medium"  },
 };
 
-export default function AccountantPage() {
+export default async function AccountantPage() {
+  const orders = await getOrders();
   const overdueOrders = orders
     .filter(o => (o.installmentPlan?.overdueDays ?? 0) > 0)
     .sort((a, b) => (b.installmentPlan!.overdueDays) - (a.installmentPlan!.overdueDays));

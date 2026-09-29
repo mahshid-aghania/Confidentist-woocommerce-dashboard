@@ -4,7 +4,9 @@ import {
   ArrowLeft, CheckCircle2, XCircle, Clock, AlertTriangle,
   CreditCard, MapPin, Receipt, User, Phone, Mail,
 } from "lucide-react";
-import { orders, type Transaction } from "@/lib/data";
+import { type Transaction, type Order } from "@/lib/data";
+import { getOrderById } from "@/lib/db";
+import { chargesByEmail, type StripeCharge } from "@/lib/stripe";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -32,7 +34,7 @@ function TxnStatusBadge({ status }: { status: Transaction["status"] }) {
   );
 }
 
-function AddressCard({ title, address }: { title: string; address: NonNullable<(typeof orders)[number]["billingAddress"]> }) {
+function AddressCard({ title, address }: { title: string; address: NonNullable<Order["billingAddress"]> }) {
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
@@ -53,8 +55,15 @@ function AddressCard({ title, address }: { title: string; address: NonNullable<(
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const order = orders.find(o => o.id === id);
+  const order = await getOrderById(id);
   if (!order) notFound();
+
+  // Live cross-check against Stripe for this person.
+  const stripeCharges = await chargesByEmail(order.email);
+  const stripeCollected = stripeCharges
+    .filter((c) => c.paid && !c.refunded)
+    .reduce((s, c) => s + c.amount, 0);
+  const reconciled = Math.abs(stripeCollected - order.paidAmount) < 1;
 
   const plan = order.installmentPlan;
   const hasPending  = order.transactions.some(t => t.status === "pending");
@@ -302,6 +311,84 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Stripe reconciliation (live) */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden" style={{ borderColor: "#E2E8F0" }}>
+        <div className="px-5 py-4 border-b flex items-center gap-2 flex-wrap" style={{ borderColor: "#F1F5F9" }}>
+          <CreditCard size={15} style={{ color: "#635BFF" }} />
+          <h2 className="text-sm font-semibold text-slate-700">Stripe Payments (live)</h2>
+          <span
+            className="text-xs font-semibold px-2 py-0.5 rounded-full ml-auto"
+            style={reconciled
+              ? { background: "#DCFCE7", color: "#15803D" }
+              : { background: "#FEF3C7", color: "#B45309" }}
+          >
+            {reconciled ? "✓ Reconciled with WooCommerce" : "⚠ Mismatch vs WooCommerce"}
+          </span>
+        </div>
+
+        <div className="px-5 py-3 grid grid-cols-2 sm:grid-cols-3 gap-4 border-b" style={{ borderColor: "#F1F5F9", background: "#F8FAFC" }}>
+          <div>
+            <p className="text-xs text-slate-400">WooCommerce — paid</p>
+            <p className="text-sm font-bold text-slate-800">{fmt(order.paidAmount)} CAD</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Stripe — collected</p>
+            <p className="text-sm font-bold" style={{ color: "#635BFF" }}>{fmt(stripeCollected)} CAD</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Difference</p>
+            <p className="text-sm font-bold" style={{ color: reconciled ? "#16A34A" : "#DC2626" }}>
+              {fmt(stripeCollected - order.paidAmount)} CAD
+            </p>
+          </div>
+        </div>
+
+        {stripeCharges.length === 0 ? (
+          <p className="px-5 py-6 text-xs text-slate-400 text-center">
+            No Stripe charges found for {order.email}. (Payments may have been collected under a different email, or Stripe access isn’t configured.)
+          </p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "#F8FAFC" }}>
+            {stripeCharges.map((c: StripeCharge) => (
+              <div key={c.id} className="px-5 py-3.5 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5">
+                    {c.refunded
+                      ? <XCircle size={14} style={{ color: "#DC2626" }} />
+                      : c.paid
+                        ? <CheckCircle2 size={14} style={{ color: "#16A34A" }} />
+                        : <Clock size={14} style={{ color: "#D97706" }} />}
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-slate-700">{c.card}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Stripe · {new Date(c.created).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" })}
+                      {c.description ? ` · ${c.description}` : ""}
+                    </p>
+                    {c.receiptUrl && (
+                      <a href={c.receiptUrl} target="_blank" rel="noopener" className="text-xs font-semibold hover:underline" style={{ color: "#635BFF" }}>
+                        View receipt →
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold text-slate-800">{fmt(c.amount)} {c.currency}</p>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={c.refunded
+                      ? { background: "#FEE2E2", color: "#DC2626" }
+                      : c.paid
+                        ? { background: "#DCFCE7", color: "#15803D" }
+                        : { background: "#FEF3C7", color: "#B45309" }}>
+                    {c.refunded ? "Refunded" : c.paid ? "Paid" : c.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

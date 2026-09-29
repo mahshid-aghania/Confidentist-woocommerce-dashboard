@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { students } from "@/lib/data";
+import { getStudents } from "@/lib/db";
 import { Users, UserCheck, UserX } from "lucide-react";
 
 const statusStyle: Record<string, { bg: string; color: string }> = {
@@ -17,6 +17,7 @@ export default async function StudentsPage({
 }) {
   const sp   = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
+  const students = await getStudents();
 
   const active    = students.filter(s => s.status === "active").length;
   const completed = students.filter(s => s.status === "completed").length;

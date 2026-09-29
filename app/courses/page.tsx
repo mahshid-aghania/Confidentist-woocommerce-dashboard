@@ -1,7 +1,8 @@
-import { courses } from "@/lib/data";
+import { getCourses } from "@/lib/db";
 import { BookOpen, Users, DollarSign, TrendingUp } from "lucide-react";
 
-export default function CoursesPage() {
+export default async function CoursesPage() {
+  const courses = await getCourses();
   const totalRevenue = courses.reduce((s, c) => s + c.revenue, 0);
   const totalSold    = courses.reduce((s, c) => s + c.sold, 0);
   const totalActive  = courses.reduce((s, c) => s + c.active, 0);

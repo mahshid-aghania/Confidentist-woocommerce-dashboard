@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import MetricCard from "@/components/MetricCard";
 import { RevenueAreaChart, EnrollmentsBarChart } from "@/components/RevenueChart";
-import { stats, orders, courses, recentMonthlyRevenue } from "@/lib/data";
+import { getStats, getOrders, getCourses, getMonthlyRevenue } from "@/lib/db";
 
 const statusStyles: Record<string, { bg: string; color: string; label: string }> = {
   completed:  { bg: "#DCFCE7", color: "#15803D", label: "Completed"  },
@@ -18,7 +18,11 @@ function fmtRevenue(n: number) {
   return `$${(n / 1000).toFixed(0)}k`;
 }
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const [stats, orders, courses, monthlyRevenue] = await Promise.all([
+    getStats(), getOrders(), getCourses(), getMonthlyRevenue(),
+  ]);
+  const recentMonthlyRevenue = monthlyRevenue.slice(-24);
   const recentOrders = orders.slice(0, 8);
 
   return (
