@@ -1,8 +1,10 @@
 import { Settings, Globe, Bell, Shield, CreditCard } from "lucide-react";
+import SyncPanel from "./SyncPanel";
 
 export default function SettingsPage() {
   return (
     <div className="space-y-6 max-w-3xl">
+      <SyncPanel />
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden" style={{ borderColor: "#E2E8F0" }}>
         <div className="px-6 py-4 border-b flex items-center gap-3" style={{ borderColor: "#F1F5F9" }}>
           <Globe size={16} style={{ color: "#1B2E5E" }} />
