@@ -6,8 +6,6 @@ import {
   LayoutDashboard, Users, BookOpen, ShoppingCart,
   BarChart3, CalendarDays, Settings, GraduationCap, LogOut, AlertTriangle,
 } from "lucide-react";
-import { orders } from "@/lib/data";
-
 const nav = [
   { label: "Dashboard",   href: "/",             icon: LayoutDashboard },
   { label: "Students",    href: "/students",     icon: Users },
@@ -19,9 +17,8 @@ const nav = [
   { label: "Settings",    href: "/settings",     icon: Settings },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ overdueCount = 0 }: { overdueCount?: number }) {
   const path = usePathname();
-  const overdueCount = orders.filter(o => (o.installmentPlan?.overdueDays ?? 0) > 0).length;
 
   return (
     <aside

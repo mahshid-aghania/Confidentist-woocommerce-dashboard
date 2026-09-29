@@ -33,11 +33,20 @@ function courseFamily(name = ""): string {
   if (n.includes("afk")) return "AFK";
   if (n.includes("acj")) return "ACJ";
   if (n.includes("ndecc")) return "NDECC";
-  if (n.includes("osce")) return "OSCE";
+  if (n.includes("osce") || n.includes("board exam booklet")) return "OSCE";
   if (n.includes("adat")) return "ADAT";
-  if (n.includes("orthodont")) return "Ortho";
+  if (n.includes("situational") || n.includes("sjt")) return "Situational Judgement";
+  if (n.includes("clinical skills")) return "Clinical Skills";
+  if (n.includes("orthodont") || n.includes("aligner")) return "Ortho";
   if (n.includes("interview")) return "Interview";
-  return name.split(/[\s–-]/)[0] || "Other";
+  if (n.includes("shipping") || n.includes("booklet") || n.includes("material")) return "Materials";
+  if (
+    n.includes("veneer") || n.includes("botox") || n.includes("filler") || n.includes("aesthetic") ||
+    n.includes("masterclass") || n.includes("porcelain") || n.includes("smile") || n.includes("composite") ||
+    n.includes("crown") || n.includes("dermal") || n.includes("lip")
+  ) return "Aesthetics / CE";
+  if (n.includes("consult")) return "Consulting";
+  return "Other";
 }
 function courseTier(name = ""): string {
   const n = name.toLowerCase();
@@ -148,11 +157,32 @@ function mapOrder(o: Row): Order {
 // Cache within a single request/render to avoid re-fetching across functions.
 let _cache: { orders: Order[]; at: number } | null = null;
 async function fetchOrders(): Promise<Order[]> {
-  if (_cache && Date.now() - _cache.at < 3000) return _cache.orders;
-  const rows: Row[] = await supaSelect("orders", { select: ORDER_SELECT, order: "date_created.desc", limit: "1000" });
-  const orders = (rows || []).map(mapOrder);
+  if (_cache && Date.now() - _cache.at < 5000) return _cache.orders;
+  // PostgREST caps at 1000 rows/request — page through all orders.
+  const all: Row[] = [];
+  for (let off = 0; off < 40000; off += 1000) {
+    const rows: Row[] = await supaSelect("orders", {
+      select: ORDER_SELECT, order: "date_created.desc", limit: "1000", offset: String(off),
+    });
+    if (!rows || rows.length === 0) break;
+    all.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  const orders = all.map(mapOrder);
   _cache = { orders, at: Date.now() };
   return orders;
+}
+
+export async function getOverdueCount(): Promise<number> {
+  // Lightweight: only installments can be overdue. Count distinct orders with a
+  // pending/failed installment past its due date.
+  const today = new Date().toISOString().slice(0, 10);
+  const rows: Row[] = await supaSelect("order_installments", {
+    select: "order_id",
+    status: "in.(pending,failed)",
+    due_date: `lt.${today}`,
+  });
+  return new Set((rows || []).map((r) => r.order_id)).size;
 }
 
 export async function getOrders(): Promise<Order[]> {
@@ -267,26 +297,50 @@ export async function getStats() {
   };
 }
 
-const COURSE_DEFS: Omit<Course, "sold" | "revenue" | "active">[] = [
-  { id: "afk", name: "Assessment of Fundamental Knowledge (AFK)", shortName: "AFK", price: 4999, color: "#1B2E5E" },
-  { id: "acj", name: "Assessment of Clinical Judgement (ACJ)", shortName: "ACJ", price: 800, color: "#2E4A97" },
-  { id: "ndecc", name: "NDECC Clinical Skills & Situational Judgement", shortName: "NDECC", price: 1200, color: "#0D9488" },
-  { id: "osce", name: "Virtual OSCE Preparation", shortName: "OSCE", price: 600, color: "#4C6EC4" },
-  { id: "adat", name: "Advanced Dental Admission Test (ADAT)", shortName: "ADAT", price: 700, color: "#F59E0B" },
-  { id: "ortho", name: "Orthodontics & Clear Aligners", shortName: "Ortho", price: 349, color: "#6366F1" },
+const PALETTE = [
+  "#1B2E5E", "#2E4A97", "#0D9488", "#4C6EC4", "#F59E0B", "#6366F1",
+  "#0EA5E9", "#DB2777", "#65A30D", "#9333EA", "#E11D48", "#0891B2", "#94A3B8",
 ];
+const FAMILY_NAMES: Record<string, string> = {
+  AFK: "Assessment of Fundamental Knowledge (AFK)",
+  ACJ: "Assessment of Clinical Judgement (ACJ)",
+  NDECC: "NDECC Clinical Skills",
+  OSCE: "Virtual OSCE Preparation",
+  ADAT: "Advanced Dental Admission Test (ADAT)",
+  "Situational Judgement": "Situational Judgement",
+  "Clinical Skills": "Clinical Skills Demos",
+  Ortho: "Orthodontics & Clear Aligners",
+  Interview: "University Interview Coaching",
+  Materials: "Booklets & Shipping",
+  "Aesthetics / CE": "Aesthetics & Continuing Education",
+  Consulting: "Consulting",
+  Other: "Other Products",
+};
 
+// Aggregate every course family that appears in real orders (not a fixed list).
 export async function getCourses(): Promise<Course[]> {
   const orders = await fetchOrders();
-  return COURSE_DEFS.map((def) => {
-    const fam = orders.filter((o) => o.course === def.shortName);
-    return {
-      ...def,
-      sold: fam.length,
-      revenue: Math.round(fam.reduce((s, o) => s + o.paidAmount, 0)),
-      active: fam.filter((o) => o.status !== "refunded" && o.paidAmount < o.amount - 0.01).length,
-    };
-  });
+  const map = new Map<string, { sold: number; revenue: number; active: number }>();
+  for (const o of orders) {
+    const fam = o.course;
+    const e = map.get(fam) ?? { sold: 0, revenue: 0, active: 0 };
+    e.sold += 1;
+    e.revenue += o.paidAmount;
+    if (o.status !== "refunded" && o.paidAmount < o.amount - 0.01) e.active += 1;
+    map.set(fam, e);
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[1].revenue - a[1].revenue)
+    .map(([fam, e], i) => ({
+      id: fam.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      name: FAMILY_NAMES[fam] || fam,
+      shortName: fam,
+      price: e.sold ? Math.round(e.revenue / e.sold) : 0,
+      color: PALETTE[i % PALETTE.length],
+      sold: e.sold,
+      revenue: Math.round(e.revenue),
+      active: e.active,
+    }));
 }
 
 export async function getMonthlyRevenue(): Promise<MonthlyRevenue[]> {
