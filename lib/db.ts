@@ -185,15 +185,35 @@ export async function getStudentsPage(page: number, perPage = 50): Promise<{ stu
   const [rows, countRes] = await Promise.all([
     supaSelect("customers", {
       is_paying_customer: "eq.true",
-      select: "wc_customer_id,first_name,last_name,email,phone,is_paying_customer,date_created,raw",
+      select: "id,wc_customer_id,first_name,last_name,email,phone,is_paying_customer,date_created,raw",
       order: "date_created.desc.nullslast",
       limit: String(perPage),
       offset: String(offset),
     }),
     supaSelect("customers", { select: "count", is_paying_customer: "eq.true" }),
   ]);
+  const students = (rows || []).map(mapCustomer);
+
+  // Enrich each student with the course families from their imported orders.
+  const uuids = (rows || []).map((r: any) => r.id).filter(Boolean);
+  if (uuids.length) {
+    const ords: any[] = await supaSelect("orders", {
+      select: "customer_id,order_line_items(name)",
+      customer_id: `in.(${uuids.join(",")})`,
+    });
+    const byCust = new Map<string, Set<string>>();
+    for (const o of ords || []) {
+      const set = byCust.get(o.customer_id) ?? new Set<string>();
+      for (const li of o.order_line_items || []) set.add(courseFamily(li.name));
+      byCust.set(o.customer_id, set);
+    }
+    students.forEach((s: Student, i: number) => {
+      const set = byCust.get((rows as any[])[i].id);
+      if (set && set.size) s.courses = [...set];
+    });
+  }
   const total = Number(countRes?.[0]?.count ?? 0);
-  return { students: (rows || []).map(mapCustomer), total };
+  return { students, total };
 }
 
 export async function getStudentStats(): Promise<{ total: number; active: number; inactive: number; completed: number }> {
