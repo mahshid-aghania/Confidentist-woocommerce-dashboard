@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getStudents } from "@/lib/db";
+import { getStudentsPage, getStudentStats } from "@/lib/db";
 import { Users, UserCheck, UserX } from "lucide-react";
 
 const statusStyle: Record<string, { bg: string; color: string }> = {
@@ -17,14 +17,16 @@ export default async function StudentsPage({
 }) {
   const sp   = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
-  const students = await getStudents();
+  const [{ students: pageStudents, total }, sstats] = await Promise.all([
+    getStudentsPage(page, PER_PAGE),
+    getStudentStats(),
+  ]);
 
-  const active    = students.filter(s => s.status === "active").length;
-  const completed = students.filter(s => s.status === "completed").length;
-  const inactive  = students.filter(s => s.status === "inactive").length;
+  const active    = sstats.active;
+  const completed = sstats.completed;
+  const inactive  = sstats.inactive;
 
-  const totalPages   = Math.ceil(students.length / PER_PAGE);
-  const pageStudents = students.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
   return (
     <div className="space-y-6">
@@ -51,7 +53,7 @@ export default async function StudentsPage({
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden" style={{ borderColor: "#E2E8F0" }}>
         <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: "#F1F5F9" }}>
           <h3 className="text-sm font-semibold text-slate-700">
-            All Students <span className="font-normal text-slate-400">({students.length.toLocaleString()} total)</span>
+            All Students <span className="font-normal text-slate-400">({total.toLocaleString()} total)</span>
           </h3>
           <p className="text-xs text-slate-400">Page {page} of {totalPages}</p>
         </div>
@@ -114,7 +116,7 @@ export default async function StudentsPage({
         {/* Pagination */}
         <div className="px-6 py-4 border-t flex items-center justify-between" style={{ borderColor: "#F1F5F9" }}>
           <p className="text-xs text-slate-400">
-            Showing {((page-1)*PER_PAGE)+1}–{Math.min(page*PER_PAGE, students.length)} of {students.length.toLocaleString()} students
+            Showing {((page-1)*PER_PAGE)+1}–{Math.min(page*PER_PAGE, total)} of {total.toLocaleString()} students
           </p>
           <div className="flex items-center gap-2">
             {page > 1 && (

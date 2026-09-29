@@ -164,6 +164,46 @@ export async function getOrderById(id: string): Promise<Order | null> {
   return rows?.[0] ? mapOrder(rows[0]) : null;
 }
 
+// ── Full student roster (from the customers table — 35k+ rows, DB-paginated) ──
+function mapCustomer(c: any): Student {
+  const name = `${c.first_name || ""} ${c.last_name || ""}`.trim() || c.email;
+  return {
+    id: String(c.wc_customer_id),
+    name,
+    email: c.email,
+    courses: [], // filled once orders are imported
+    enrolledAt: fmtDate(c.date_created),
+    status: c.is_paying_customer ? "active" : "inactive",
+    examDate: null,
+    country: c.raw?.country || "—",
+  };
+}
+
+export async function getStudentsPage(page: number, perPage = 50): Promise<{ students: Student[]; total: number }> {
+  const offset = (Math.max(1, page) - 1) * perPage;
+  const [rows, countRes] = await Promise.all([
+    supaSelect("customers", {
+      select: "wc_customer_id,first_name,last_name,email,phone,is_paying_customer,date_created,raw",
+      order: "date_created.desc.nullslast",
+      limit: String(perPage),
+      offset: String(offset),
+    }),
+    supaSelect("customers", { select: "count" }),
+  ]);
+  const total = Number(countRes?.[0]?.count ?? 0);
+  return { students: (rows || []).map(mapCustomer), total };
+}
+
+export async function getStudentStats(): Promise<{ total: number; active: number; inactive: number; completed: number }> {
+  const [t, paying] = await Promise.all([
+    supaSelect("customers", { select: "count" }),
+    supaSelect("customers", { select: "count", is_paying_customer: "eq.true" }),
+  ]);
+  const total = Number(t?.[0]?.count ?? 0);
+  const active = Number(paying?.[0]?.count ?? 0);
+  return { total, active, inactive: total - active, completed: 0 };
+}
+
 export async function getStudents(): Promise<Student[]> {
   const orders = await fetchOrders();
   const byEmail = new Map<string, Order[]>();
@@ -188,8 +228,7 @@ export async function getStudents(): Promise<Student[]> {
 }
 
 export async function getStats() {
-  const orders = await fetchOrders();
-  const emails = new Set(orders.map((o) => o.email).filter(Boolean));
+  const [orders, custStats] = await Promise.all([fetchOrders(), getStudentStats()]);
   const collected = orders.reduce((s, o) => s + o.paidAmount, 0);
   const contracted = orders.reduce((s, o) => s + o.amount, 0);
   const fullyPaid = orders.filter((o) => o.paidAmount >= o.amount - 0.01).length;
@@ -198,11 +237,10 @@ export async function getStats() {
     const d = new Date(o.date);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }).length;
-  const active = orders.filter((o) => o.status !== "refunded" && o.paidAmount < o.amount - 0.01).length;
   return {
     totalRevenue: Math.round(collected),
-    totalStudents: emails.size,
-    activeStudents: active,
+    totalStudents: custStats.total,
+    activeStudents: custStats.active,
     newThisMonth,
     totalOrders: orders.length,
     avgOrderValue: orders.length ? Math.round(contracted / orders.length) : 0,
