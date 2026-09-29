@@ -179,29 +179,27 @@ function mapCustomer(c: any): Student {
   };
 }
 
+// Only real students = paying customers (WooCommerce has ~32k junk/bot signups we exclude).
 export async function getStudentsPage(page: number, perPage = 50): Promise<{ students: Student[]; total: number }> {
   const offset = (Math.max(1, page) - 1) * perPage;
   const [rows, countRes] = await Promise.all([
     supaSelect("customers", {
+      is_paying_customer: "eq.true",
       select: "wc_customer_id,first_name,last_name,email,phone,is_paying_customer,date_created,raw",
       order: "date_created.desc.nullslast",
       limit: String(perPage),
       offset: String(offset),
     }),
-    supaSelect("customers", { select: "count" }),
+    supaSelect("customers", { select: "count", is_paying_customer: "eq.true" }),
   ]);
   const total = Number(countRes?.[0]?.count ?? 0);
   return { students: (rows || []).map(mapCustomer), total };
 }
 
 export async function getStudentStats(): Promise<{ total: number; active: number; inactive: number; completed: number }> {
-  const [t, paying] = await Promise.all([
-    supaSelect("customers", { select: "count" }),
-    supaSelect("customers", { select: "count", is_paying_customer: "eq.true" }),
-  ]);
-  const total = Number(t?.[0]?.count ?? 0);
-  const active = Number(paying?.[0]?.count ?? 0);
-  return { total, active, inactive: total - active, completed: 0 };
+  const paying = await supaSelect("customers", { select: "count", is_paying_customer: "eq.true" });
+  const total = Number(paying?.[0]?.count ?? 0);
+  return { total, active: total, inactive: 0, completed: 0 };
 }
 
 export async function getStudents(): Promise<Student[]> {
