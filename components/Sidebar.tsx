@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Users, BookOpen, ShoppingCart,
+  LayoutDashboard, Users, BookOpen, ShoppingCart, Store,
   BarChart3, CalendarDays, Settings, GraduationCap, LogOut, AlertTriangle,
 } from "lucide-react";
 const nav = [
@@ -11,6 +11,7 @@ const nav = [
   { label: "Students",    href: "/students",     icon: Users },
   { label: "Courses",     href: "/courses",      icon: BookOpen },
   { label: "Orders",      href: "/orders",       icon: ShoppingCart },
+  { label: "WC Orders",   href: "/wc-orders",    icon: Store },
   { label: "Analytics",   href: "/analytics",    icon: BarChart3 },
   { label: "Exam Dates",  href: "/exam-dates",   icon: CalendarDays },
   { label: "Accountant",  href: "/accountant",   icon: AlertTriangle },
