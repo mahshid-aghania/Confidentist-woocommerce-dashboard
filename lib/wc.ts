@@ -41,3 +41,35 @@ export const getOrder = (id: number | string) => wc(`orders/${id}`);
 // List orders page-by-page. Returns [] when a page is empty.
 export const listOrders = (params: Record<string, string | number>) =>
   wc("orders", { per_page: 100, ...params });
+
+// Like wc(), but also returns the X-WP-Total / X-WP-TotalPages headers that
+// WooCommerce sends on list endpoints — needed to show the real item count and
+// page count without pulling the whole dataset.
+export async function wcListWithMeta(
+  path: string,
+  params: Record<string, string | number> = {},
+): Promise<{ data: any[]; total: number; totalPages: number }> {
+  if (!CK || !CS) throw new Error("Missing WC_CONSUMER_KEY / WC_CONSUMER_SECRET");
+  const url = new URL(`${BASE}/wp-json/wc/v3/${path}`);
+  url.searchParams.set("consumer_key", CK);
+  url.searchParams.set("consumer_secret", CS);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+
+  const res = await fetch(url.toString(), {
+    headers: { "User-Agent": UA, Accept: "application/json" },
+    cache: "no-store",
+  });
+  const text = await res.text();
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`WC ${path} returned non-JSON (${res.status}): ${text.slice(0, 160)}`);
+  }
+  if (json && json.code && json.data && json.data.status >= 400) {
+    throw new Error(`WC ${path}: ${json.code} — ${json.message}`);
+  }
+  const total = parseInt(res.headers.get("x-wp-total") || "0", 10);
+  const totalPages = parseInt(res.headers.get("x-wp-totalpages") || "0", 10);
+  return { data: Array.isArray(json) ? json : [], total, totalPages };
+}
