@@ -125,9 +125,10 @@ export function mapOrder(o: any): OrderRow {
     total,
     net,
     hasRefund: Math.abs(refundSum) > 0.0001,
-    // No export plugin meta is exposed by this store's REST API, so there is
-    // nothing authentic to show — render a dash rather than fabricate a value.
-    exportStatus: null,
+    // Export status comes from the WebToffee export plugin, which stamps
+    // `wf_order_exported_status = '1'` on orders it has exported. Orders without
+    // the meta have never been exported -> render a dash (matches the admin).
+    exportStatus: String(meta.get("wf_order_exported_status") || "") === "1" ? "Exported" : null,
     origin: originLabel(meta),
   };
 }
