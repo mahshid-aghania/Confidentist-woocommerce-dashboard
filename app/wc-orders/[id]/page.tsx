@@ -8,7 +8,7 @@ import { getOrder } from "@/lib/wc";
 import { mapOrder } from "@/lib/wc-orders";
 import { getInstallmentDetailByOrderNumber, type InstallmentRow } from "@/lib/db";
 import { chargesByEmail, type StripeCharge } from "@/lib/stripe";
-import CopyLinkButton from "./CopyLinkButton";
+import SendLinkDialog from "./SendLinkDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -339,13 +339,17 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
                           {inst.status === "paid" ? (
                             <span style={{ color: C.slate, fontSize: 13 }}>—</span>
                           ) : canSend && inst.paymentLinkUrl ? (
-                            <div className="inline-flex items-center gap-2">
-                              <CopyLinkButton url={inst.paymentLinkUrl} />
-                              <a href={inst.paymentLinkUrl} target="_blank" rel="noopener" aria-label="Open payment link in a new tab"
-                                className="inline-flex items-center gap-1 font-semibold" style={{ color: C.blue, fontSize: 13, minHeight: 40, padding: "0 4px" }}>
-                                <ExternalLink size={14} /> Open
-                              </a>
-                            </div>
+                            <SendLinkDialog
+                              orderNumber={row.number}
+                              sequence={inst.sequence}
+                              instLabel={label}
+                              amountLabel={fmt(inst.amount)}
+                              dueLabel={fmtDate(inst.dueDate)}
+                              email={b.email || ""}
+                              customerName={row.customerName}
+                              course={courseName}
+                              url={inst.paymentLinkUrl}
+                            />
                           ) : canSend ? (
                             <span style={{ color: C.slate, fontSize: 13 }}>No link yet</span>
                           ) : (
