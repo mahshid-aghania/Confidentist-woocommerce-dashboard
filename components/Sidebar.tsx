@@ -4,11 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Store,
-  CalendarDays, Settings, GraduationCap, LogOut, AlertTriangle,
+  Settings, GraduationCap, LogOut, AlertTriangle,
 } from "lucide-react";
 const nav = [
   { label: "WC Orders",   href: "/wc-orders",    icon: Store },
-  { label: "Exam Dates",  href: "/exam-dates",   icon: CalendarDays },
   { label: "Accountant",  href: "/accountant",   icon: AlertTriangle },
   { label: "Settings",    href: "/settings",     icon: Settings },
 ];
