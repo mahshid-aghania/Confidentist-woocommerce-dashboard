@@ -1,5 +1,6 @@
 import "./styles.css";
 import { fetchOrdersPage, monthOptions, monthToRange, type OrdersQuery } from "@/lib/wc-orders";
+import { getInstallmentSummaryByOrderNumbers, type InstallmentSummary } from "@/lib/db";
 import WcOrdersClient from "./WcOrdersClient";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,17 @@ export default async function WcOrdersPage({
     error = e?.message || "Failed to load orders from WooCommerce.";
   }
 
+  // Enrich the visible rows with their installment financials (one Supabase
+  // query for the whole page). Only multi-installment plans get a summary.
+  let installments: Record<string, InstallmentSummary> = {};
+  if (result?.orders?.length) {
+    try {
+      installments = await getInstallmentSummaryByOrderNumbers(result.orders.map((o) => o.number));
+    } catch {
+      installments = {};
+    }
+  }
+
   // Month options are derived from the newest visible order (falls back to the
   // first page's top row); purely for the "All dates" dropdown.
   const newestISO = result?.orders?.[0]?.dateISO || "";
@@ -79,6 +91,7 @@ export default async function WcOrdersPage({
       customer={customerRaw}
       months={months}
       scanned={result!.scanned}
+      installments={installments}
     />
   );
 }

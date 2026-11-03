@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { formatMoney, type OrderRow } from "@/lib/wc-orders";
+import type { InstallmentSummary } from "@/lib/db";
 
 type Props = {
   orders: OrderRow[];
@@ -16,6 +17,24 @@ type Props = {
   customer: string;
   months: { value: string; label: string }[];
   scanned: boolean;
+  installments: Record<string, InstallmentSummary>;
+};
+
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function shortDate(iso: string | null): string {
+  if (!iso) return "—";
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  return `${MON[parseInt(m[2], 10) - 1]} ${parseInt(m[3], 10)}, ${m[1]}`;
+}
+
+// Compact, accessible installment payment-status pill (icon-free text label +
+// colour; the label alone conveys state, so colour is never the only signal).
+const PLAN_STATUS: Record<InstallmentSummary["status"], { label: string; bg: string; color: string }> = {
+  paid:      { label: "Paid in full", bg: "#ECFDF3", color: "#067647" },
+  overdue:   { label: "Overdue",      bg: "#FEF3F2", color: "#B42318" },
+  due:       { label: "Due now",      bg: "#EFF4FF", color: "#175CD3" },
+  scheduled: { label: "On schedule",  bg: "#F2F4F7", color: "#475467" },
 };
 
 // column key -> the REST orderby value behind it
@@ -52,7 +71,7 @@ function EyeIcon() {
 
 export default function WcOrdersClient(props: Props) {
   const router = useRouter();
-  const { orders, total, totalPages, page, orderby, order, month, customer, months, scanned } = props;
+  const { orders, total, totalPages, page, orderby, order, month, customer, months, scanned, installments } = props;
 
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pageInput, setPageInput] = useState(String(page));
@@ -163,11 +182,11 @@ export default function WcOrdersClient(props: Props) {
 
       <input
         className="wcx-input"
-        placeholder="Filter by registered customer"
+        placeholder="Search name, email, or customer ID"
         value={customerInput}
         onChange={(e) => setCustomerInput(e.target.value)}
-        style={{ minWidth: 220 }}
-        aria-label="Filter by registered customer"
+        style={{ minWidth: 240 }}
+        aria-label="Search orders by customer name, email, or customer ID"
       />
 
       <button className="wcx-btn" onClick={applyFilters}>Filter</button>
@@ -219,6 +238,9 @@ export default function WcOrdersClient(props: Props) {
             <SortableTh col="date" label="Date" />
             <th>Status</th>
             <SortableTh col="total" label="Total" align="right" />
+            <th className="wcx-col-money">Paid</th>
+            <th className="wcx-col-money">Remaining</th>
+            <th className="wcx-col-nextdue">Installments</th>
             <SortableTh col="export" label="Export Status" align="center" />
             <th>Origin</th>
           </tr>
@@ -226,7 +248,7 @@ export default function WcOrdersClient(props: Props) {
         <tbody>
           {orders.length === 0 && (
             <tr>
-              <td colSpan={8}><div className="wcx-empty">No orders found.</div></td>
+              <td colSpan={11}><div className="wcx-empty">No orders found.</div></td>
             </tr>
           )}
           {orders.map((o) => (
@@ -262,6 +284,34 @@ export default function WcOrdersClient(props: Props) {
                   )}
                 </span>
               </td>
+              {(() => {
+                const s = installments[o.number];
+                if (!s) {
+                  return (
+                    <>
+                      <td className="wcx-col-money"><span className="wcx-dash">—</span></td>
+                      <td className="wcx-col-money"><span className="wcx-dash">—</span></td>
+                      <td className="wcx-col-nextdue"><span className="wcx-dash">—</span></td>
+                    </>
+                  );
+                }
+                const ps = PLAN_STATUS[s.status];
+                return (
+                  <>
+                    <td className="wcx-col-money">{formatMoney(s.paid)}</td>
+                    <td className="wcx-col-money" style={{ color: s.remaining > 0 ? (s.overdue ? "#B42318" : "#2c3338") : "#067647" }}>
+                      {s.remaining > 0 ? formatMoney(s.remaining) : "$0.00"}
+                    </td>
+                    <td className="wcx-col-nextdue">
+                      <span className="wcx-plan-badge" style={{ background: ps.bg, color: ps.color }}>{ps.label}</span>
+                      <span className="wcx-plan-sub">
+                        {s.paidCount}/{s.totalCount} paid
+                        {s.status !== "paid" && s.nextDueDate ? ` · next ${shortDate(s.nextDueDate)}` : ""}
+                      </span>
+                    </td>
+                  </>
+                );
+              })()}
               <td className="wcx-col-export">
                 {o.exportStatus ? o.exportStatus : <span className="wcx-dash">—</span>}
               </td>
