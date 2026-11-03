@@ -194,6 +194,73 @@ export async function getOrderById(id: string): Promise<Order | null> {
   return rows?.[0] ? mapOrder(rows[0]) : null;
 }
 
+// ── Per-installment detail for the WooCommerce-style order page ──────────────
+// Keyed by the WooCommerce order NUMBER (what /wc-orders/[id] receives), not the
+// Supabase row id. Returns the raw installment rows (due/paid/link) so the order
+// detail page can render a full schedule — amount-paid, remaining, status, link.
+export type InstallmentRow = {
+  sequence: number;
+  kind: string | null;
+  label: string | null;
+  wcPaymentId: string | null;
+  dueDate: string | null;
+  amount: number;
+  status: string;            // pending | paid | cancelled | failed | refunded
+  paymentMethod: string | null;
+  paidAt: string | null;
+  paymentLinkUrl: string | null;
+};
+
+export type OrderInstallmentDetail = {
+  orderNumber: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  status: string;
+  totalAmount: number;
+  dateCreated: string | null;
+  installments: InstallmentRow[];
+};
+
+export async function getInstallmentDetailByOrderNumber(
+  orderNumber: string,
+): Promise<OrderInstallmentDetail | null> {
+  const rows: Row[] = await supaSelect("orders", {
+    select: ORDER_SELECT,
+    order_number: `eq.${orderNumber}`,
+    limit: "1",
+  });
+  const o = rows?.[0];
+  if (!o) return null;
+  const cust = o.customers || {};
+  const name = `${cust.first_name || ""} ${cust.last_name || ""}`.trim() || "—";
+  const installments: InstallmentRow[] = (o.order_installments || [])
+    .slice()
+    .sort((a: Row, b: Row) => a.sequence - b.sequence)
+    .map((i: Row) => ({
+      sequence: i.sequence,
+      kind: i.kind ?? null,
+      label: i.label ?? null,
+      wcPaymentId: i.wc_payment_id ?? null,
+      dueDate: i.due_date ?? null,
+      amount: num(i.amount),
+      status: i.status || "pending",
+      paymentMethod: i.payment_method ?? null,
+      paidAt: i.paid_at ?? null,
+      paymentLinkUrl: i.stripe_payment_link_url ?? null,
+    }));
+  return {
+    orderNumber: String(o.order_number),
+    customerName: name,
+    email: cust.email || "",
+    phone: cust.phone || "",
+    status: o.status || "",
+    totalAmount: num(o.total_amount),
+    dateCreated: o.date_created ?? null,
+    installments,
+  };
+}
+
 // ── Full student roster (from the customers table — 35k+ rows, DB-paginated) ──
 function mapCustomer(c: any): Student {
   const name = `${c.first_name || ""} ${c.last_name || ""}`.trim() || c.email;
