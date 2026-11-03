@@ -3,14 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BookOpen, ShoppingCart, Store,
-  BarChart3, CalendarDays, Settings, GraduationCap, LogOut, AlertTriangle,
+  Store,
+  CalendarDays, Settings, GraduationCap, LogOut, AlertTriangle,
 } from "lucide-react";
 const nav = [
   { label: "WC Orders",   href: "/wc-orders",    icon: Store },
-  { label: "Courses",     href: "/courses",      icon: BookOpen },
-  { label: "Orders",      href: "/orders",       icon: ShoppingCart },
-  { label: "Analytics",   href: "/analytics",    icon: BarChart3 },
   { label: "Exam Dates",  href: "/exam-dates",   icon: CalendarDays },
   { label: "Accountant",  href: "/accountant",   icon: AlertTriangle },
   { label: "Settings",    href: "/settings",     icon: Settings },
