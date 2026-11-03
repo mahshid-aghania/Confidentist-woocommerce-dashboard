@@ -194,6 +194,136 @@ export async function getOrderById(id: string): Promise<Order | null> {
   return rows?.[0] ? mapOrder(rows[0]) : null;
 }
 
+// ── Per-installment detail for the WooCommerce-style order page ──────────────
+// Keyed by the WooCommerce order NUMBER (what /wc-orders/[id] receives), not the
+// Supabase row id. Returns the raw installment rows (due/paid/link) so the order
+// detail page can render a full schedule — amount-paid, remaining, status, link.
+export type InstallmentRow = {
+  sequence: number;
+  kind: string | null;
+  label: string | null;
+  wcPaymentId: string | null;
+  dueDate: string | null;
+  amount: number;
+  status: string;            // pending | paid | cancelled | failed | refunded
+  paymentMethod: string | null;
+  paidAt: string | null;
+  paymentLinkUrl: string | null;
+};
+
+export type OrderInstallmentDetail = {
+  orderNumber: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  status: string;
+  totalAmount: number;
+  dateCreated: string | null;
+  installments: InstallmentRow[];
+};
+
+export async function getInstallmentDetailByOrderNumber(
+  orderNumber: string,
+): Promise<OrderInstallmentDetail | null> {
+  const rows: Row[] = await supaSelect("orders", {
+    select: ORDER_SELECT,
+    order_number: `eq.${orderNumber}`,
+    limit: "1",
+  });
+  const o = rows?.[0];
+  if (!o) return null;
+  const cust = o.customers || {};
+  const name = `${cust.first_name || ""} ${cust.last_name || ""}`.trim() || "—";
+  const installments: InstallmentRow[] = (o.order_installments || [])
+    .slice()
+    .sort((a: Row, b: Row) => a.sequence - b.sequence)
+    .map((i: Row) => ({
+      sequence: i.sequence,
+      kind: i.kind ?? null,
+      label: i.label ?? null,
+      wcPaymentId: i.wc_payment_id ?? null,
+      dueDate: i.due_date ?? null,
+      amount: num(i.amount),
+      status: i.status || "pending",
+      paymentMethod: i.payment_method ?? null,
+      paidAt: i.paid_at ?? null,
+      paymentLinkUrl: i.stripe_payment_link_url ?? null,
+    }));
+  return {
+    orderNumber: String(o.order_number),
+    customerName: name,
+    email: cust.email || "",
+    phone: cust.phone || "",
+    status: o.status || "",
+    totalAmount: num(o.total_amount),
+    dateCreated: o.date_created ?? null,
+    installments,
+  };
+}
+
+// ── Installment summary for a page of WooCommerce orders ─────────────────────
+// Given the order NUMBERS visible on one /wc-orders page, return a compact
+// installment summary per order (only for true multi-installment plans) so the
+// list can show Paid / Remaining / Next due inline. One Supabase query per page.
+export type InstallmentSummary = {
+  total: number;
+  paid: number;
+  remaining: number;
+  paidCount: number;
+  totalCount: number;
+  nextDueDate: string | null;
+  nextDueAmount: number | null;
+  status: "paid" | "overdue" | "due" | "scheduled";
+  overdue: boolean;
+};
+
+function torontoTodayISO(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date()); // en-CA → YYYY-MM-DD
+}
+
+export async function getInstallmentSummaryByOrderNumbers(
+  numbers: (string | number)[],
+): Promise<Record<string, InstallmentSummary>> {
+  const nums = [...new Set(numbers.map((n) => String(n)).filter(Boolean))];
+  if (!nums.length) return {};
+  const today = torontoTodayISO();
+  const rows: Row[] = await supaSelect("orders", {
+    select: "order_number,order_installments(due_date,amount,status)",
+    order_number: `in.(${nums.join(",")})`,
+  });
+  const out: Record<string, InstallmentSummary> = {};
+  for (const o of rows || []) {
+    const insts = (o.order_installments || []).filter((i: Row) => i.status !== "cancelled" && i.status !== "refunded");
+    if (insts.length <= 1) continue; // single charge = full payment, not a plan
+    const total = insts.reduce((s: number, i: Row) => s + num(i.amount), 0);
+    const paidRows = insts.filter((i: Row) => i.status === "paid");
+    const paid = paidRows.reduce((s: number, i: Row) => s + num(i.amount), 0);
+    const remaining = Math.max(0, total - paid);
+    const openRows = insts
+      .filter((i: Row) => i.status === "pending" || i.status === "failed")
+      .slice()
+      .sort((a: Row, b: Row) => String(a.due_date).localeCompare(String(b.due_date)));
+    const next = openRows[0] || null;
+    const overdue = openRows.some((i: Row) => i.due_date && String(i.due_date).slice(0, 10) < today);
+    const status: InstallmentSummary["status"] =
+      remaining <= 0.01 ? "paid"
+      : overdue ? "overdue"
+      : next && String(next.due_date).slice(0, 10) === today ? "due"
+      : "scheduled";
+    out[String(o.order_number)] = {
+      total, paid, remaining,
+      paidCount: paidRows.length,
+      totalCount: insts.length,
+      nextDueDate: next?.due_date ? String(next.due_date).slice(0, 10) : null,
+      nextDueAmount: next ? num(next.amount) : null,
+      status, overdue,
+    };
+  }
+  return out;
+}
+
 // ── Full student roster (from the customers table — 35k+ rows, DB-paginated) ──
 function mapCustomer(c: any): Student {
   const name = `${c.first_name || ""} ${c.last_name || ""}`.trim() || c.email;

@@ -199,7 +199,25 @@
 .wcx-col-check { width: 2.2em; text-align: center !important; padding-left: 14px !important; }
 .wcx-col-eye { width: 2.4em; text-align: center !important; }
 .wcx-col-total { text-align: right !important; }
+.wcx-col-money { text-align: right !important; white-space: nowrap; }
+.wcx-col-nextdue { white-space: nowrap; min-width: 150px; }
 .wcx-col-export { text-align: center !important; }
+
+/* installment summary cell */
+.wcx-plan-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.wcx-plan-sub {
+  display: block;
+  color: #50575e;
+  font-size: 11.5px;
+  margin-top: 2px;
+}
 
 .wcx-check {
   width: 16px;
