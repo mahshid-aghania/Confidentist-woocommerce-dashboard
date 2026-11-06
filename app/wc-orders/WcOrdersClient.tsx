@@ -182,12 +182,12 @@ export default function WcOrdersClient(props: Props) {
 
       <input
         className="wcx-input"
-        placeholder="Search name, email, or customer ID"
+        placeholder="Search order #, name, or email"
         value={customerInput}
         onChange={(e) => setCustomerInput(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyFilters(); } }}
         style={{ minWidth: 240 }}
-        aria-label="Search orders by customer name, email, or customer ID"
+        aria-label="Search orders by order number, customer name, or email"
       />
 
       <button className="wcx-btn" onClick={applyFilters}>Filter</button>

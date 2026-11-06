@@ -40,8 +40,11 @@ export default async function WcOrdersPage({
     q.before = range.before;
   }
   if (customerRaw) {
-    if (/^\d+$/.test(customerRaw)) q.customer = parseInt(customerRaw, 10);
-    else q.search = customerRaw;
+    // WooCommerce `search` matches order number, customer name, and email — so
+    // route every typed term (including a numeric order number like 58952)
+    // through it. (Previously an all-digits term was treated as a registered
+    // customer ID, which matched nothing when someone searched an order number.)
+    q.search = customerRaw.trim();
   }
 
   let result;
