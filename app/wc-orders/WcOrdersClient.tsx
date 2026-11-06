@@ -268,9 +268,15 @@ export default function WcOrdersClient(props: Props) {
               </td>
               <td style={{ color: "#50575e" }}>{o.dateLabel}</td>
               <td>
-                <span className="wcx-badge" style={{ background: o.statusBg, color: o.statusColor }}>
-                  {o.statusLabel}
-                </span>
+                {installments[o.number]?.status === "paid" || o.status === "completed" ? (
+                  <span className="wcx-badge" style={{ background: "#ECFDF3", color: "#067647" }}>
+                    Paid in full
+                  </span>
+                ) : (
+                  <span className="wcx-badge" style={{ background: o.statusBg, color: o.statusColor }}>
+                    {o.statusLabel}
+                  </span>
+                )}
               </td>
               <td className="wcx-col-total">
                 <span className="wcx-total">
