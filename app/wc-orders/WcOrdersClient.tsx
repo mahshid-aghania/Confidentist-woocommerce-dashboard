@@ -185,6 +185,7 @@ export default function WcOrdersClient(props: Props) {
         placeholder="Search name, email, or customer ID"
         value={customerInput}
         onChange={(e) => setCustomerInput(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyFilters(); } }}
         style={{ minWidth: 240 }}
         aria-label="Search orders by customer name, email, or customer ID"
       />
