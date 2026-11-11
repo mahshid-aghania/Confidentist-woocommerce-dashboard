@@ -7,10 +7,26 @@ import {
 import { getOrder } from "@/lib/wc";
 import { mapOrder } from "@/lib/wc-orders";
 import { getInstallmentDetailByOrderNumber, type InstallmentRow } from "@/lib/db";
+import { getAwcdpPlan } from "@/lib/awcdp";
 import { chargesByEmail, type StripeCharge } from "@/lib/stripe";
 import SendLinkDialog from "./SendLinkDialog";
 
 export const dynamic = "force-dynamic";
+
+// Unified installment row for the schedule table. Sourced from the WooCommerce
+// AWCDP deposits/part-payments plugin (authoritative, includes per-installment
+// tax) when available, otherwise from the ConfiDentist database.
+type UiInst = {
+  sequence: number;
+  label: string | null;
+  kind: string | null;
+  dueDate: string | null;
+  amount: number;
+  tax: number | null;     // null when the source doesn't record per-installment tax
+  status: string;
+  paidAt: string | null;
+  paymentLinkUrl: string | null;
+};
 
 // ── Design tokens (WCAG 2.2 AA — validated contrast on white/pale backgrounds) ──
 const C = {
@@ -51,7 +67,7 @@ function fmtDate(d: string | null): string {
 type DisplayStatus =
   | "Paid" | "Partially Paid" | "Due" | "Upcoming" | "Overdue" | "Failed" | "Cancelled" | "Refunded";
 
-function deriveStatus(inst: InstallmentRow, today: string): DisplayStatus {
+function deriveStatus(inst: UiInst, today: string): DisplayStatus {
   switch (inst.status) {
     case "paid": return "Paid";
     case "failed": return "Failed";
@@ -92,10 +108,10 @@ function StatusChip({ status, size = "sm" }: { status: DisplayStatus; size?: "sm
   );
 }
 
-function amountPaidOf(inst: InstallmentRow): number {
+function amountPaidOf(inst: UiInst): number {
   return inst.status === "paid" ? inst.amount : 0;
 }
-function remainingOf(inst: InstallmentRow): number {
+function remainingOf(inst: UiInst): number {
   if (inst.status === "paid" || inst.status === "cancelled" || inst.status === "refunded") return 0;
   return inst.amount;
 }
@@ -149,17 +165,32 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
   const b = o.billing || {};
   const today = torontoToday();
 
-  // Supabase installment plan + live Stripe reconciliation, in parallel.
-  const [plan, stripeCharges] = await Promise.all([
+  // WooCommerce AWCDP schedule + Supabase plan + live Stripe reconciliation, in parallel.
+  const [plan, awcdp, stripeCharges] = await Promise.all([
     getInstallmentDetailByOrderNumber(row.number).catch(() => null),
+    getAwcdpPlan(o).catch(() => null),
     (b.email ? chargesByEmail(b.email) : Promise.resolve([])).catch(() => [] as StripeCharge[]),
   ]);
 
-  const insts = plan?.installments ?? [];
+  // Prefer the WooCommerce AWCDP deposits/part-payments schedule — it is the
+  // authoritative source for orders paid through that plugin and carries the tax
+  // for each installment. Fall back to the ConfiDentist DB plan for other orders.
+  const insts: UiInst[] = awcdp
+    ? awcdp.installments.map((i) => ({
+        sequence: i.sequence, label: i.label, kind: i.kind, dueDate: i.dueDate,
+        amount: i.amount, tax: i.tax, status: i.status, paidAt: i.paidAt, paymentLinkUrl: null,
+      }))
+    : (plan?.installments ?? []).map((i: InstallmentRow) => ({
+        sequence: i.sequence, label: i.label, kind: i.kind, dueDate: i.dueDate,
+        amount: i.amount, tax: null, status: i.status, paidAt: i.paidAt, paymentLinkUrl: i.paymentLinkUrl,
+      }));
   const hasPlan = insts.length > 0;
+  const hasTax = insts.some((i) => i.tax != null);
+  const planSource = awcdp ? "WooCommerce" : (plan ? "ConfiDentist DB" : "");
+  const totalTax = awcdp ? awcdp.totalTax : null;
 
   // Financials — prefer installment data, fall back to the WooCommerce order total.
-  const orderTotal = plan?.totalAmount || row.total;
+  const orderTotal = awcdp ? awcdp.total : (plan?.totalAmount || row.total);
   const paid = hasPlan ? insts.reduce((s, i) => s + amountPaidOf(i), 0) : 0;
   const remaining = Math.max(0, orderTotal - paid);
   const paidCount = insts.filter((i) => i.status === "paid").length;
@@ -301,7 +332,7 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
           <Card
             title="Installment Schedule"
             icon={CalendarClock}
-            right={<span className="font-medium" style={{ color: C.slate, fontSize: 13 }}>{paidCount} of {insts.length} paid</span>}
+            right={<span className="font-medium" style={{ color: C.slate, fontSize: 13 }}>{paidCount} of {insts.length} paid{planSource ? ` · from ${planSource}` : ""}</span>}
           >
             <div className="overflow-x-auto">
               <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 14 }}>
@@ -310,6 +341,7 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
                     <th className="text-left font-semibold px-5 py-3" style={{ color: C.slate }}>Installment</th>
                     <th className="text-left font-semibold px-3 py-3" style={{ color: C.slate }}>Due date</th>
                     <th className="text-right font-semibold px-3 py-3" style={{ color: C.slate }}>Amount due</th>
+                    {hasTax && <th className="text-right font-semibold px-3 py-3" style={{ color: C.slate }}>Tax</th>}
                     <th className="text-right font-semibold px-3 py-3" style={{ color: C.slate }}>Paid</th>
                     <th className="text-right font-semibold px-3 py-3" style={{ color: C.slate }}>Remaining</th>
                     <th className="text-left font-semibold px-3 py-3" style={{ color: C.slate }}>Status</th>
@@ -331,6 +363,7 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
                         </td>
                         <td className="px-3 py-3.5" style={{ color: C.slate }}>{fmtDate(inst.dueDate)}</td>
                         <td className="text-right px-3 py-3.5 font-medium" style={{ color: C.ink }}>{fmt(inst.amount)}</td>
+                        {hasTax && <td className="text-right px-3 py-3.5" style={{ color: C.slate }}>{inst.tax != null ? fmt(inst.tax) : "—"}</td>}
                         <td className="text-right px-3 py-3.5" style={{ color: ap > 0 ? "#067647" : C.slate }}>{ap > 0 ? fmt(ap) : "—"}</td>
                         <td className="text-right px-3 py-3.5" style={{ color: rem > 0 ? C.ink : C.slate }}>{rem > 0 ? fmt(rem) : "—"}</td>
                         <td className="px-3 py-3.5"><StatusChip status={ds} /></td>
@@ -350,6 +383,8 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
                               course={courseName}
                               url={inst.paymentLinkUrl}
                             />
+                          ) : canSend && planSource === "WooCommerce" ? (
+                            <span style={{ color: C.slate, fontSize: 13 }}>Auto-charge</span>
                           ) : canSend ? (
                             <span style={{ color: C.slate, fontSize: 13 }}>No link yet</span>
                           ) : (
@@ -362,9 +397,16 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
                 </tbody>
               </table>
             </div>
-            <p className="px-5 py-3" style={{ color: C.slate, fontSize: 12.5, borderTop: `1px solid ${C.line}` }}>
-              Payment links shown here were generated through the authorized Stripe flow. “Copy link” / “Open” never charge a card or mark anything paid — status updates only when Stripe confirms the payment.
-            </p>
+            {planSource === "WooCommerce" ? (
+              <p className="px-5 py-3" style={{ color: C.slate, fontSize: 12.5, borderTop: `1px solid ${C.line}` }}>
+                Schedule read live from WooCommerce (Deposits &amp; Part-Payments). Each amount is the gross payment including tax; the plugin collects each scheduled payment automatically on its due date.
+                {totalTax != null ? ` Total tax across all installments: ${fmt(totalTax)}.` : ""}
+              </p>
+            ) : (
+              <p className="px-5 py-3" style={{ color: C.slate, fontSize: 12.5, borderTop: `1px solid ${C.line}` }}>
+                Payment links shown here were generated through the authorized Stripe flow. “Copy link” / “Open” never charge a card or mark anything paid — status updates only when Stripe confirms the payment.
+              </p>
+            )}
           </Card>
         )}
 
