@@ -8,10 +8,12 @@
 // The dashboard's Supabase-based installment view doesn't see these, so an order
 // paid through this plugin looked like it only had its first payment.
 //
-// This reads the parent meta to classify/ order the payments and fetches the
-// child orders to get the exact amount, tax, status and paid date for each.
+// The parent's schedule meta lists each payment's child-order id (and its type +
+// due timestamp). We fetch each child order BY ID to get the exact amount, tax,
+// status and paid date. (Filtering `orders?parent=` is unreliable on this store —
+// it returns nothing — so we must fetch by id.)
 
-import { listOrders } from "./wc";
+import { getOrder } from "./wc";
 
 export type AwcdpInstallment = {
   sequence: number;        // 1-based display order (deposit first)
@@ -53,51 +55,59 @@ function dateOnly(d: unknown): string | null {
  */
 export async function getAwcdpPlan(parentOrder: any): Promise<AwcdpPlan | null> {
   const schedRaw = metaVal(parentOrder, "_awcdp_deposits_payment_schedule");
-  const hasDeposit = metaVal(parentOrder, "_awcdp_deposits_order_has_deposit");
-  if (!schedRaw && hasDeposit !== "yes") return null;
+  if (!schedRaw) return null;
 
-  // Parse the schedule to classify each child order (deposit vs partial) and its due timestamp.
-  const info: Record<string, { type: string; dueTs: number | null }> = {};
+  let sched: any;
   try {
-    const sched = typeof schedRaw === "string" ? JSON.parse(schedRaw) : schedRaw;
-    if (sched && typeof sched === "object") {
-      for (const [key, e] of Object.entries<any>(sched)) {
-        if (e && e.id != null) {
-          info[String(e.id)] = {
-            type: e.type || (key === "deposit" ? "deposit" : "partial_payment"),
-            dueTs: /^\d+$/.test(key) ? parseInt(key, 10) : null,
-          };
-        }
-      }
-    }
+    sched = typeof schedRaw === "string" ? JSON.parse(schedRaw) : schedRaw;
   } catch {
-    /* fall through — we can still classify from child-order meta below */
+    return null;
   }
+  if (!sched || typeof sched !== "object") return null;
 
-  // All child orders of this parent (deposit + partial payments) in one call.
-  const children: any[] = await listOrders({ parent: parentOrder.id, per_page: 100 }).catch(() => []);
-  if (!Array.isArray(children) || children.length === 0) return null;
+  // Each schedule entry → one child order id, its type, and (for partials) a due timestamp.
+  const entries: { id: number; type: string; dueTs: number | null }[] = [];
+  for (const [key, e] of Object.entries<any>(sched)) {
+    if (e && e.id != null) {
+      entries.push({
+        id: Number(e.id),
+        type: e.type || (key === "deposit" ? "deposit" : "partial_payment"),
+        dueTs: /^\d+$/.test(key) ? parseInt(key, 10) : null,
+      });
+    }
+  }
+  if (entries.length === 0) return null;
 
-  const rows: AwcdpInstallment[] = children.map((c: any) => {
-    const ci = info[String(c.id)] || {};
-    const autoDue = metaVal(c, "_awcdp_auto_payment_due_date");
-    // A deposit child has no scheduled due date; everything else is a partial payment.
-    const isDeposit = ci.type === "deposit" || (ci.dueTs == null && autoDue == null);
+  // Fetch each child order by id (authoritative amount / tax / status / paid date).
+  const fetched = await Promise.all(
+    entries.map((en) =>
+      getOrder(en.id)
+        .then((c: any) => ({ en, c }))
+        .catch(() => null),
+    ),
+  );
+
+  const rows: AwcdpInstallment[] = [];
+  for (const item of fetched) {
+    if (!item || !item.c || item.c.id == null) continue;
+    const { en, c } = item;
+    const isDeposit = en.type === "deposit";
     const paid = c.status === "completed" || c.status === "processing" || !!c.date_paid;
-    return {
+    rows.push({
       sequence: 0,
       label: "",
       kind: isDeposit ? "deposit" : "partial",
       childOrderId: c.id,
       dueDate: isDeposit
         ? (dateOnly(c.date_paid) || dateOnly(c.date_created))
-        : (tsToDate(ci.dueTs) || tsToDate(autoDue)),
+        : (tsToDate(en.dueTs) || tsToDate(metaVal(c, "_awcdp_auto_payment_due_date"))),
       amount: parseFloat(c.total || "0"),
       tax: parseFloat(c.total_tax || "0"),
       status: paid ? "paid" : "pending",
       paidAt: dateOnly(c.date_paid),
-    };
-  });
+    });
+  }
+  if (rows.length === 0) return null;
 
   // Deposit first, then partials ordered by due date.
   rows.sort((a, b) =>
