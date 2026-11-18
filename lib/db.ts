@@ -324,6 +324,188 @@ export async function getInstallmentSummaryByOrderNumbers(
   return out;
 }
 
+// ── Collections / Receivables — who owes money, grouped by person ────────────
+// A person is INCLUDED when they have at least one unpaid (pending/failed)
+// installment due on or before `cutoff` (default: end of December 2026). For
+// each included person we return their FULL plan: how many payments in total,
+// how many already paid (count + $), and the complete remaining schedule (what
+// is left and when). Obvious test rows are filtered out (token amounts < $1 and
+// the owner's own test order). Two Supabase queries: scope detection, then the
+// full installment set for the scoped orders.
+const PAID_STATUSES = new Set(["paid"]);
+const UNPAID_STATUSES = new Set(["pending", "failed"]);
+const DEAD_STATUSES = new Set(["cancelled", "refunded"]); // ignored in plan totals
+
+export type RemainingInstallment = {
+  label: string;             // e.g. "Installment 3" / "Deposit" / custom label
+  dueDate: string | null;    // YYYY-MM-DD
+  amount: number;
+  status: string;            // pending | failed
+  overdue: boolean;          // due date already past (as of today)
+  withinCutoff: boolean;     // due on/before the cutoff
+  hasLink: boolean;          // a Stripe payment link already exists
+  orderNumber: string;
+};
+
+export type Receivable = {
+  customerId: string;
+  name: string;
+  email: string;
+  phone: string;
+  orders: string[];          // WooCommerce order numbers involved
+  primaryOrderId: string;    // uuid of the largest order (for the detail link)
+  course: string;            // course family of the primary order
+  planCount: number;         // total payments in the plan(s)
+  paidCount: number;         // payments already made
+  paidAmount: number;        // $ already collected
+  remainingCount: number;    // unpaid payments left (all, incl. beyond cutoff)
+  owed: number;              // $ remaining (full balance across all unpaid)
+  dueByCutoff: number;       // $ unpaid due on/before the cutoff
+  overdueAmount: number;     // $ unpaid already past due
+  nextDue: string | null;    // earliest unpaid due date
+  finalDue: string | null;   // last unpaid due date
+  schedule: RemainingInstallment[]; // every remaining payment, earliest first
+  hasFailed: boolean;        // any charge actually failed (needs a fresh link)
+  hasLink: boolean;          // a Stripe link exists for some unpaid payment
+};
+
+export type ReceivablesResult = {
+  cutoff: string;
+  today: string;
+  people: Receivable[];
+  totals: {
+    people: number;
+    remainingCount: number;
+    owed: number;            // full remaining balance of included people
+    dueByCutoff: number;     // portion due on/before the cutoff
+    overdue: number;         // portion already past due
+    collected: number;       // already paid by these people (on these plans)
+  };
+};
+
+// Hardcoded exclusions for rows that are not real debts.
+const RECEIVABLE_EXCLUDE_ORDERS = new Set<string>(["58309"]); // owner's own test order
+const RECEIVABLE_MIN_AMOUNT = 1; // drop $0.50-style token/test installments
+
+function instLabel(i: Row): string {
+  if (i.label) return String(i.label);
+  if (i.kind === "deposit") return "Deposit";
+  if (i.kind === "full") return "Full payment";
+  return `Installment ${i.sequence ?? ""}`.trim();
+}
+
+export async function getReceivables(cutoff = "2026-12-31"): Promise<ReceivablesResult> {
+  const today = torontoTodayISO();
+
+  // 1) Which orders are in scope — have an unpaid installment due ≤ cutoff.
+  const scopeRows: Row[] = await supaSelect("order_installments", {
+    select: "order_id,orders(order_number)",
+    status: "in.(pending,failed)",
+    due_date: `lte.${cutoff}`,
+    amount: `gte.${RECEIVABLE_MIN_AMOUNT}`,
+    limit: "2000",
+  });
+  const scopedIds = [
+    ...new Set(
+      (scopeRows || [])
+        .filter((r) => !RECEIVABLE_EXCLUDE_ORDERS.has(String(r.orders?.order_number ?? "")))
+        .map((r) => r.order_id)
+        .filter(Boolean),
+    ),
+  ];
+  if (!scopedIds.length) {
+    return { cutoff, today, people: [], totals: { people: 0, remainingCount: 0, owed: 0, dueByCutoff: 0, overdue: 0, collected: 0 } };
+  }
+
+  // 2) Full installment set for those orders (the complete plans).
+  const rows: Row[] = await supaSelect("order_installments", {
+    select:
+      "sequence,kind,label,amount,due_date,status,stripe_payment_link_url,order_id," +
+      "orders(id,order_number,customer_id,order_line_items(name)," +
+      "customers(first_name,last_name,email,phone))",
+    order_id: `in.(${scopedIds.join(",")})`,
+    order: "sequence.asc",
+    limit: "5000",
+  });
+
+  const byCust = new Map<string, Receivable & { _orderTotals: Map<string, number> }>();
+
+  for (const i of rows || []) {
+    const o = i.orders || {};
+    const orderNumber = String(o.order_number ?? "");
+    const custId = o.customer_id || o.id || orderNumber;
+    const cust = o.customers || {};
+    const name = `${cust.first_name || ""} ${cust.last_name || ""}`.trim() || cust.email || "—";
+    const amt = num(i.amount);
+    const status = String(i.status || "pending");
+    if (DEAD_STATUSES.has(status)) continue;          // cancelled/refunded don't count
+    if (amt < RECEIVABLE_MIN_AMOUNT) continue;         // skip token/test rows
+    const due = i.due_date ? String(i.due_date).slice(0, 10) : null;
+
+    let r = byCust.get(custId);
+    if (!r) {
+      r = {
+        customerId: custId, name, email: cust.email || "", phone: cust.phone || "",
+        orders: [], primaryOrderId: o.id || "", course: courseFamily(o.order_line_items?.[0]?.name || ""),
+        planCount: 0, paidCount: 0, paidAmount: 0, remainingCount: 0, owed: 0,
+        dueByCutoff: 0, overdueAmount: 0, nextDue: null, finalDue: null,
+        schedule: [], hasFailed: false, hasLink: false, _orderTotals: new Map(),
+      };
+      byCust.set(custId, r);
+    }
+    if (orderNumber && !r.orders.includes(orderNumber)) r.orders.push(orderNumber);
+    r.planCount += 1;
+
+    if (PAID_STATUSES.has(status)) {
+      r.paidCount += 1;
+      r.paidAmount += amt;
+    } else if (UNPAID_STATUSES.has(status)) {
+      const overdue = !!due && due < today;
+      r.remainingCount += 1;
+      r.owed += amt;
+      if (due && due <= cutoff) r.dueByCutoff += amt;
+      if (overdue) r.overdueAmount += amt;
+      if (due && (!r.nextDue || due < r.nextDue)) r.nextDue = due;
+      if (due && (!r.finalDue || due > r.finalDue)) r.finalDue = due;
+      if (status === "failed") r.hasFailed = true;
+      if (i.stripe_payment_link_url) r.hasLink = true;
+      r.schedule.push({
+        label: instLabel(i), dueDate: due, amount: amt, status,
+        overdue, withinCutoff: !!due && due <= cutoff,
+        hasLink: !!i.stripe_payment_link_url, orderNumber,
+      });
+      // largest-balance order → used for the "View order" link
+      const tot = (r._orderTotals.get(orderNumber) || 0) + amt;
+      r._orderTotals.set(orderNumber, tot);
+      const biggest = [...r._orderTotals.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (biggest && biggest[0] === orderNumber && o.id) r.primaryOrderId = o.id;
+    }
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const people = [...byCust.values()]
+    .map(({ _orderTotals, ...r }) => ({
+      ...r,
+      owed: round2(r.owed),
+      paidAmount: round2(r.paidAmount),
+      dueByCutoff: round2(r.dueByCutoff),
+      overdueAmount: round2(r.overdueAmount),
+      schedule: r.schedule.sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate))),
+    }))
+    .sort((a, b) => b.owed - a.owed);
+
+  const totals = {
+    people: people.length,
+    remainingCount: people.reduce((s, r) => s + r.remainingCount, 0),
+    owed: round2(people.reduce((s, r) => s + r.owed, 0)),
+    dueByCutoff: round2(people.reduce((s, r) => s + r.dueByCutoff, 0)),
+    overdue: round2(people.reduce((s, r) => s + r.overdueAmount, 0)),
+    collected: round2(people.reduce((s, r) => s + r.paidAmount, 0)),
+  };
+
+  return { cutoff, today, people, totals };
+}
+
 // ── Full student roster (from the customers table — 35k+ rows, DB-paginated) ──
 function mapCustomer(c: any): Student {
   const name = `${c.first_name || ""} ${c.last_name || ""}`.trim() || c.email;
