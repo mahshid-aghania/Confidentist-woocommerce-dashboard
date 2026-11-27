@@ -58,7 +58,7 @@ export default async function OrdersPage({
           <AlertTriangle size={16} style={{ color: "#DC2626" }} className="shrink-0" />
           <p className="text-sm" style={{ color: "#991B1B" }}>
             <span className="font-semibold">{lateCount} order{lateCount > 1 ? "s" : ""}</span> have overdue installment payments.{" "}
-            <Link href="/accountant" className="underline font-semibold">View accountant panel →</Link>
+            <Link href="/wc-orders" className="underline font-semibold">View in WC Orders →</Link>
           </p>
         </div>
       )}

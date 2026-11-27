@@ -4,13 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Store,
-  Settings, GraduationCap, LogOut, AlertTriangle, Wallet, Zap,
+  Settings, GraduationCap, LogOut, Wallet, Zap,
 } from "lucide-react";
 const nav = [
   { label: "WC Orders",   href: "/wc-orders",    icon: Store },
   { label: "Collections", href: "/collections",  icon: Wallet },
   { label: "Recent Payments", href: "/recent-payments", icon: Zap },
-  { label: "Accountant",  href: "/accountant",   icon: AlertTriangle },
   { label: "Settings",    href: "/settings",     icon: Settings },
 ];
 
@@ -45,7 +44,9 @@ export default function Sidebar({ overdueCount = 0 }: { overdueCount?: number })
         </p>
         {nav.map(({ label, href, icon: Icon }) => {
           const active = href === "/" ? path === "/" : path.startsWith(href);
-          const isAccountant = href === "/accountant";
+          // The overdue count used to live on the Accountant tab; it now rides on
+          // WC Orders, where the overdue students are surfaced.
+          const showBadge = href === "/wc-orders" && overdueCount > 0;
           return (
             <Link
               key={href}
@@ -53,29 +54,24 @@ export default function Sidebar({ overdueCount = 0 }: { overdueCount?: number })
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
               style={{
                 background:  active ? "#1B2E5E" : "transparent",
-                color:       active ? "#FFFFFF"  : isAccountant && overdueCount > 0 ? "#FCA5A5" : "#94A3B8",
+                color:       active ? "#FFFFFF"  : showBadge ? "#FCA5A5" : "#94A3B8",
               }}
             >
               <Icon size={17} />
               {label}
-              {isAccountant && overdueCount > 0 && !active && (
+              {showBadge && !active && (
                 <span
                   className="ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
                   style={{ background: "#DC2626", color: "#fff" }}
+                  title={`${overdueCount} order${overdueCount === 1 ? "" : "s"} with an overdue installment`}
                 >
                   {overdueCount}
                 </span>
               )}
-              {active && !isAccountant && (
+              {active && (
                 <span
                   className="ml-auto w-1.5 h-1.5 rounded-full"
                   style={{ background: "#4C9BE8" }}
-                />
-              )}
-              {active && isAccountant && (
-                <span
-                  className="ml-auto w-1.5 h-1.5 rounded-full"
-                  style={{ background: "#FCA5A5" }}
                 />
               )}
             </Link>

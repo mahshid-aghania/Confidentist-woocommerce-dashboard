@@ -1,8 +1,9 @@
 import "./styles.css";
 import { fetchOrdersPage, monthOptions, monthToRange, type OrdersQuery } from "@/lib/wc-orders";
-import { getInstallmentSummaryByOrderNumbers, type InstallmentSummary } from "@/lib/db";
+import { getInstallmentSummaryByOrderNumbers, getReceivables, type InstallmentSummary, type Receivable } from "@/lib/db";
 import { reconcileRecentPayments } from "@/lib/live-payments";
 import WcOrdersClient from "./WcOrdersClient";
+import OverdueBanner from "./OverdueBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,18 @@ export default async function WcOrdersPage({
   const newestISO = result?.orders?.[0]?.dateISO || "";
   const months = monthOptions(newestISO || "2026-10-01", 24);
 
+  // Overdue students — the old Accountant "call list", now live from Supabase.
+  // Surfaced as a banner on top of WC Orders so staff still see who's behind.
+  let overdue: Receivable[] = [];
+  try {
+    const rec = await getReceivables();
+    overdue = rec.people
+      .filter((p) => p.overdueAmount > 0)
+      .sort((a, b) => b.overdueAmount - a.overdueAmount);
+  } catch {
+    overdue = [];
+  }
+
   if (error) {
     return (
       <div className="wcx">
@@ -85,19 +98,22 @@ export default async function WcOrdersPage({
   }
 
   return (
-    <WcOrdersClient
-      orders={result!.orders}
-      total={result!.total}
-      totalPages={result!.totalPages}
-      page={page}
-      perPage={PER_PAGE}
-      orderby={orderby!}
-      order={order}
-      month={month}
-      customer={customerRaw}
-      months={months}
-      scanned={result!.scanned}
-      installments={installments}
-    />
+    <>
+      <OverdueBanner people={overdue} />
+      <WcOrdersClient
+        orders={result!.orders}
+        total={result!.total}
+        totalPages={result!.totalPages}
+        page={page}
+        perPage={PER_PAGE}
+        orderby={orderby!}
+        order={order}
+        month={month}
+        customer={customerRaw}
+        months={months}
+        scanned={result!.scanned}
+        installments={installments}
+      />
+    </>
   );
 }
