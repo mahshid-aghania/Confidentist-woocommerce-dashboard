@@ -302,11 +302,12 @@ export default function WcOrdersClient(props: Props) {
                     </>
                   );
                 }
-                const ps = PLAN_STATUS[s.status];
+                // Overdue is not shown on WC Orders — a past-due open payment reads as "Due now".
+                const ps = PLAN_STATUS[s.status === "overdue" ? "due" : s.status];
                 return (
                   <>
                     <td className="wcx-col-money">{formatMoney(s.paid)}</td>
-                    <td className="wcx-col-money" style={{ color: s.remaining > 0 ? (s.overdue ? "#B42318" : "#2c3338") : "#067647" }}>
+                    <td className="wcx-col-money" style={{ color: s.remaining > 0 ? "#2c3338" : "#067647" }}>
                       {s.remaining > 0 ? formatMoney(s.remaining) : "$0.00"}
                     </td>
                     <td className="wcx-col-nextdue">
