@@ -77,9 +77,13 @@ function cardLabel(c: any): string {
 
 export async function getLivePayments(
   days = 7,
-  opts: { fix?: boolean } = {},
+  opts: { fix?: boolean; tag?: string } = {},
 ): Promise<{ payments: LivePayment[]; checkedAt: string; days: number }> {
   const fix = opts.fix !== false;
+  // What we stamp onto an installment we mark paid. The real-time webhook passes
+  // "stripe webhook" so the Recent Payments page reports it as Real-time ✓; the
+  // page's own catch-up pass uses the default LIVE_TAG ("stripe live") → "caught".
+  const writeTag = opts.tag || LIVE_TAG;
   const since = Math.floor(Date.now() / 1000) - Math.round(days * 86400);
 
   const [chargesRaw, sessions] = await Promise.all([
@@ -198,11 +202,11 @@ export async function getLivePayments(
       try {
         await supaUpdate(
           "order_installments",
-          { status: "paid", paid_at: created.toISOString(), source_status: `paid (${LIVE_TAG} ${c.id})` },
+          { status: "paid", paid_at: created.toISOString(), source_status: `paid (${writeTag} ${c.id})` },
           { id: `eq.${inst.id}`, status: "neq.paid" },
         );
         inst.status = "paid";
-        inst.source_status = `paid (${LIVE_TAG} ${c.id})`;
+        inst.source_status = `paid (${writeTag} ${c.id})`;
         base.state = "fixed";
       } catch {
         base.state = "unmatched";
@@ -273,6 +277,21 @@ export async function getLivePayments(
 
   out.sort((a, b) => b.createdISO.localeCompare(a.createdISO));
   return { payments: out, checkedAt: new Date().toISOString(), days };
+}
+
+// Called by the Stripe webhook the moment a payment succeeds. Reconciles a short
+// recent window (so it also captures the just-paid charge/session/payment_intent
+// regardless of which event fired) and stamps anything it settles as "stripe webhook"
+// → the Recent Payments page shows it as Real-time ✓. Returns a small summary.
+export async function reconcileForWebhook(
+  days = 2,
+): Promise<{ matched: number; settled: number; unmatched: number }> {
+  const { payments } = await getLivePayments(days, { fix: true, tag: "stripe webhook" });
+  return {
+    matched: payments.filter((p) => p.orderNumber).length,
+    settled: payments.filter((p) => p.state === "fixed").length,
+    unmatched: payments.filter((p) => p.state === "unmatched").length,
+  };
 }
 
 // Fire-and-forget-safe wrapper for pages: never throws, never waits longer than `ms`.
