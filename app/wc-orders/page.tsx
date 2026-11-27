@@ -61,7 +61,7 @@ export default async function WcOrdersPage({
   // Live Stripe check runs AFTER the response is sent, so it never slows the page
   // down; anything it marks paid shows on the next load (the Stripe webhook covers
   // the instant case).
-  after(() => reconcileRecentPayments(14, 20000));
+  after(() => reconcileRecentPayments(45, 25000));
 
   // Enrich the visible rows with their installment financials (one Supabase
   // query for the whole page). Only multi-installment plans get a summary.
