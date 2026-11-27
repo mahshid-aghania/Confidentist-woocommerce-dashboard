@@ -106,7 +106,11 @@ export async function getLivePayments(
     const s = pi ? sessByPI.get(pi) : undefined;
     const desc = String(c.description || "");
     const plink = s && typeof s.payment_link === "string" ? s.payment_link : "";
-    const wcRef = desc.match(/Order\s+#?([0-9]+-[0-9]+)/i)?.[1] || "";
+    // "Order 58131-3" in the charge description (WooCommerce gateway), or the
+    // wc_payment_id carried in a payment link's metadata (links made by hand in Stripe).
+    const metaRef = String(s?.metadata?.wc_payment_id || c.metadata?.wc_payment_id || s?.metadata?.order_id || "").trim();
+    const wcRef =
+      desc.match(/Order\s+#?([0-9]+-[0-9]+)/i)?.[1] || (/^[0-9]+-[0-9]+$/.test(metaRef) ? metaRef : "");
     const orderRef =
       (!wcRef && desc.match(/Order\s+#?([0-9]+)\b/i)?.[1]) ||
       String(s?.metadata?.order_number || c.metadata?.order_number || "").replace(/\D/g, "") ||

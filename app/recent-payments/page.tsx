@@ -29,7 +29,7 @@ function when(iso: string) {
 export default async function RecentPaymentsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const daysRaw = parseInt(one(sp.days) || "7", 10);
-  const days = [1, 3, 7, 14, 30].includes(daysRaw) ? daysRaw : 7;
+  const days = [1, 3, 7, 14, 30, 90].includes(daysRaw) ? daysRaw : 7;
 
   let payments: LivePayment[] = [];
   let checkedAt = new Date().toISOString();
@@ -60,7 +60,7 @@ export default async function RecentPaymentsPage({ searchParams }: { searchParam
           </p>
         </div>
         <div className="flex gap-1.5">
-          {[1, 3, 7, 14, 30].map((d) => (
+          {[1, 3, 7, 14, 30, 90].map((d) => (
             <Link
               key={d}
               href={`/recent-payments?days=${d}`}
