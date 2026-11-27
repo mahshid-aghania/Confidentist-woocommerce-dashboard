@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Store,
-  Settings, GraduationCap, LogOut, AlertTriangle, Wallet,
+  Settings, GraduationCap, LogOut, AlertTriangle, Wallet, Zap,
 } from "lucide-react";
 const nav = [
   { label: "WC Orders",   href: "/wc-orders",    icon: Store },
   { label: "Collections", href: "/collections",  icon: Wallet },
+  { label: "Recent Payments", href: "/recent-payments", icon: Zap },
   { label: "Accountant",  href: "/accountant",   icon: AlertTriangle },
   { label: "Settings",    href: "/settings",     icon: Settings },
 ];
