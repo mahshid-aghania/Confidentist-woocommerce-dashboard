@@ -3,7 +3,7 @@
 const SK = process.env.STRIPE_SECRET_KEY || "";
 const BASE = "https://api.stripe.com/v1";
 
-async function stripe(path: string, params: Record<string, string | number> = {}): Promise<any> {
+export async function stripe(path: string, params: Record<string, string | number> = {}): Promise<any> {
   if (!SK) return { error: { message: "no STRIPE_SECRET_KEY" } };
   const url = new URL(BASE + path);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));

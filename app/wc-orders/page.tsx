@@ -1,6 +1,7 @@
 import "./styles.css";
 import { fetchOrdersPage, monthOptions, monthToRange, type OrdersQuery } from "@/lib/wc-orders";
 import { getInstallmentSummaryByOrderNumbers, type InstallmentSummary } from "@/lib/db";
+import { reconcileRecentPayments } from "@/lib/live-payments";
 import WcOrdersClient from "./WcOrdersClient";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,9 @@ export default async function WcOrdersPage({
   let result;
   let error: string | null = null;
   try {
-    result = await fetchOrdersPage(q);
+    // Pull the WooCommerce page while a live Stripe check marks any recently paid
+    // installment the webhook missed, so the payment pills below are current.
+    [result] = await Promise.all([fetchOrdersPage(q), reconcileRecentPayments(14)]);
   } catch (e: any) {
     error = e?.message || "Failed to load orders from WooCommerce.";
   }
