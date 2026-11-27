@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 
 // Gate the whole dashboard behind HTTP Basic Auth.
 // Credentials come from env: DASHBOARD_USER / DASHBOARD_PASS.
-// The /api/sync route is excluded here because it has its own SYNC_SECRET header auth
-// (so cron / server-to-server calls still work).
+// Server-to-server endpoints are excluded here because they do their own auth:
+//   /api/sync          → SYNC_SECRET header (cron / server-to-server)
+//   /api/stripe-webhook → Stripe signature (STRIPE_WEBHOOK_SECRET)
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
 
+const PUBLIC_API = ["/api/sync", "/api/stripe-webhook"];
+
 export function middleware(req: NextRequest) {
-  if (req.nextUrl.pathname.startsWith("/api/sync")) {
+  if (PUBLIC_API.some((p) => req.nextUrl.pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
