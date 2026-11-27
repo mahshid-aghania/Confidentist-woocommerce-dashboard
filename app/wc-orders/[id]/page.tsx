@@ -76,8 +76,8 @@ function deriveStatus(inst: UiInst, today: string): DisplayStatus {
     default: break; // pending
   }
   const due = inst.dueDate ? inst.dueDate.slice(0, 10) : null;
-  if (due && due < today) return "Overdue";
-  if (due && due === today) return "Due";
+  // Overdue is not shown on WC Orders: any open payment on/after its due date reads as "Due".
+  if (due && due <= today) return "Due";
   return "Upcoming";
 }
 
@@ -199,7 +199,6 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
     .filter((i) => i.status === "pending" || i.status === "failed")
     .slice()
     .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))[0];
-  const overdueCount = insts.filter((i) => deriveStatus(i, today) === "Overdue").length;
   const progressPct = orderTotal > 0 ? Math.min(100, Math.round((paid / orderTotal) * 100)) : 0;
 
   // Live Stripe reconciliation.
@@ -230,11 +229,6 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
                 {row.customerName}{row.customerId ? ` · Customer #${row.customerId}` : ""} · Registered {row.dateLabel}
               </p>
             </div>
-            {overdueCount > 0 && (
-              <div className="inline-flex items-center gap-2 rounded-lg px-3 py-2 font-semibold" style={{ background: "#FEF3F2", color: "#B42318", border: "1px solid #FECDCA", fontSize: 14 }}>
-                <AlertTriangle size={16} /> {overdueCount} overdue installment{overdueCount !== 1 ? "s" : ""}
-              </div>
-            )}
           </div>
         </div>
 
@@ -242,8 +236,8 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Stat label="Order total" value={fmt(orderTotal)} sub="CAD" />
           <Stat label="Amount paid" value={fmt(paid)} sub={`${progressPct}% of total`} color="#067647" />
-          <Stat label="Remaining balance" value={fmt(remaining)} color={remaining > 0 ? (overdueCount > 0 ? "#B42318" : C.ink) : "#067647"} sub={hasPlan ? `${paidCount} of ${insts.length} installments paid` : "Paid in full"} />
-          <Stat label="Next payment" value={nextDue ? fmt(nextDue.amount) : "—"} sub={nextDue ? `Due ${fmtDate(nextDue.dueDate)}` : "Nothing scheduled"} color={overdueCount > 0 ? "#B42318" : C.ink} />
+          <Stat label="Remaining balance" value={fmt(remaining)} color={remaining > 0 ? C.ink : "#067647"} sub={hasPlan ? `${paidCount} of ${insts.length} installments paid` : "Paid in full"} />
+          <Stat label="Next payment" value={nextDue ? fmt(nextDue.amount) : "—"} sub={nextDue ? `Due ${fmtDate(nextDue.dueDate)}` : "Nothing scheduled"} color={C.ink} />
         </div>
 
         {/* progress bar */}
@@ -254,7 +248,7 @@ export default async function WcOrderDetail({ params }: { params: Promise<{ id: 
               <span className="font-semibold" style={{ color: C.ink, fontSize: 13 }}>{fmt(paid)} <span style={{ color: C.slate, fontWeight: 400 }}>of {fmt(orderTotal)} CAD</span></span>
             </div>
             <div className="h-2.5 rounded-full overflow-hidden" style={{ background: "#EAECF0" }} role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Payment progress">
-              <div className="h-full rounded-full" style={{ width: `${progressPct}%`, background: progressPct === 100 ? "#12B76A" : overdueCount > 0 ? "#D92D20" : C.blue }} />
+              <div className="h-full rounded-full" style={{ width: `${progressPct}%`, background: progressPct === 100 ? "#12B76A" : C.blue }} />
             </div>
           </div>
         )}

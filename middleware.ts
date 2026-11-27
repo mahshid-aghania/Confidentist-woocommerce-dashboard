@@ -5,11 +5,12 @@ import { NextRequest, NextResponse } from "next/server";
 // Server-to-server endpoints are excluded here because they do their own auth:
 //   /api/sync          → SYNC_SECRET header (cron / server-to-server)
 //   /api/stripe-webhook → Stripe signature (STRIPE_WEBHOOK_SECRET)
+//   /api/wc-webhook     → WooCommerce signature (WC_WEBHOOK_SECRET)
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
 
-const PUBLIC_API = ["/api/sync", "/api/stripe-webhook"];
+const PUBLIC_API = ["/api/sync", "/api/stripe-webhook", "/api/wc-webhook"];
 
 export function middleware(req: NextRequest) {
   if (PUBLIC_API.some((p) => req.nextUrl.pathname.startsWith(p))) {
